@@ -8,7 +8,7 @@ from src.sketch.sketch import Sketch  # Register dataset
 
 if __name__ == "__main__":
     # Using QWEN model for ARM to x86 translation
-    config = Config(ConfigType.BART_RISC2ARM.get_path())
+    config = Config(ConfigType.QWEN_X862ARM64.get_path())
     guess = Guess(config=config)
     predictions = guess.guess()
     print("Inference complete.")

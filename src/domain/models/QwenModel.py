@@ -3,16 +3,14 @@
 import logging
 import time
 from functools import wraps
-from typing import Dict, List, Optional, Union, Any, Callable, TypeVar
+from typing import Dict, List, Optional, Union, Callable, TypeVar
 
 import torch
-import warnings
-from torch.types import Device
 from tqdm.auto import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
-from transformers.models import deberta
 
-from src.helpers.model import Model, InferenceConfig
+from src.helpers.dataset import DatasetInstance
+from src.helpers.model import Model, InferenceConfig, PredictionResult
 
 logger = logging.getLogger(__name__)
 
@@ -89,7 +87,8 @@ class QwenModel(Model):
 
         elapsed_time = time.time() - start_time
         logger.info(
-            f"Model initialization completed in {elapsed_time:.2f} seconds")
+            f"Model initialization completed in {elapsed_time:.2f} seconds"
+        )
 
     @measure_time("Prompt preparation")
     def prepare_prompt(self, source_code: str, source_lang: str, target_lang: str) -> str:
@@ -153,24 +152,15 @@ class QwenModel(Model):
             **kwargs: Additional decoding arguments
 
         Returns:
-            Decoded string or list of strings
+            Single string if batch size is 1, otherwise list of strings
         """
-        logger.debug(f"Decoding tensor of shape: {token_ids.shape}")
-
-        # Handle scalar tensors by unsqueezing to add batch dimension
-        if len(token_ids.shape) == 0:
-            token_ids = token_ids.unsqueeze(0).unsqueeze(
-                0)  # Add batch and sequence dimensions
-        elif len(token_ids.shape) == 1:
-            token_ids = token_ids.unsqueeze(0)  # Add batch dimension
-
         decoded = self.tokenizer.batch_decode(
-            token_ids, skip_special_tokens=True, **kwargs)
-        result = decoded[0] if token_ids.shape[0] == 1 else decoded
-
-        logger.debug(
-            f"Decoded text length: {len(result) if isinstance(result, str) else len(result[0])}")
-        return result
+            token_ids,
+            skip_special_tokens=True,
+        )
+        if token_ids.shape[0] == 1:
+            return decoded[0]
+        return decoded
 
     # @measure_time("Model inference")
     def infer(
@@ -192,31 +182,74 @@ class QwenModel(Model):
         if config is None:
             config = InferenceConfig()
 
-        logger.info(f"Starting inference with temperature={config.temperature}, "
-                    f"max_length={config.max_length}")
-        logger.info(f"Input shape: {input_tokens['input_ids'].shape}")
+        logger.info(
+            f"Starting inference with temperature={config.temperature}, "
+            f"max_length={config.max_length}"
+        )
+        logger.info(
+            f"Input shape: {input_tokens['input_ids'].shape}"
+        )
 
-        output = self.model.generate(
+        outputs = self.model.generate(
             **input_tokens,
             max_new_tokens=config.max_length,
             temperature=config.temperature,
             do_sample=(config.temperature > 0),
             output_attentions=True,
             return_dict_in_generate=True,
-            **kwargs
+            output_scores=True,
+            no_repeat_ngram_size=0,
         )
+        alignments = self.get_alignments(outputs)
 
-        logger.info(f"Generated shape: {output.shape}")
+        return (input_tokens.input_ids, outputs.sequences, alignments)
 
-        # Remove input prompt tokens from output
-        input_len = input_tokens["input_ids"].shape[1]
-        generated_ids = output.sequences[:, input_len:]
+    def get_alignments(self, pred_outputs, top_k=10):
+        attentions = [
+            xattn[-1].mean(dim=1)[:, 0]  # (output_len, input_len)
+            for xattn in pred_outputs.cross_attentions
+        ]
 
-        result = InferenceResult(
-            tokens=generated_ids,
-            scores=output.logits,
-            attention=output.attentions[-1]
+        out_seq_len = pred_outputs.sequences.shape[-1]
+        aligned_tokens = []
+
+        for out_idx in range(out_seq_len):
+            if out_idx >= len(attentions):
+                break
+
+            # Get attention weights for this output token
+            alignment = attentions[out_idx][0]  # (input_len,)
+
+            # Get top-k input indices by attention
+            top_indices = alignment.topk(top_k).indices.tolist()
+
+            aligned_tokens.append(top_indices)
+
+        return aligned_tokens
+
+    def predict(
+        self,
+        instance: DatasetInstance,
+        config: Optional[InferenceConfig] = None,
+    ) -> PredictionResult:
+        self.model.eval()
+
+        with torch.no_grad():
+            prompt = self.prepare_prompt(
+                instance.source,
+                instance.source_lang,
+                instance.target_lang
+            )
+            tokenized_input = self.tokenize(prompt)
+
+            pred = self.infer(
+                tokenized_input, config
+            )
+            gc.collect()
+
+        return PredictionResult(
+            instance_id=instance.instance_id,
+            source=pred[0],
+            pred=pred[1],
+            alignments=pred[2]
         )
-
-        logger.info(f"Generated {generated_ids.shape[1]} new tokens")
-        return result
