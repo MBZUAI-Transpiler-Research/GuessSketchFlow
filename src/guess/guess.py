@@ -67,9 +67,10 @@ class Guess:
         # Initialize model based on configuration
         model_name = self.config.model_name.lower()
         if "qwen" in model_name:
-            print(f"Loading Qwen model: {self.config.model_name}")
+            model_name = model_name.split(":")[1]
+            print(f"Loading Qwen model: {model_name}")
             self.model: Model = QwenModel(
-                model_name=self.config.model_name, device="cpu"
+                model_name=model_name, device="cpu"
             )
         elif "bart" in model_name:
             print(f"Loading BART model: {self.config.model_name}")
