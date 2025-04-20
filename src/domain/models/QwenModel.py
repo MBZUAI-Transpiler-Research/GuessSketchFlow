@@ -200,29 +200,21 @@ class QwenModel(Model):
             output_scores=True,
             no_repeat_ngram_size=0,
         )
-        alignments = self.get_alignments(outputs)
+        alignments = self.get_alignments(outputs, input_tokens.input_ids.shape[1])
 
         return (input_tokens.input_ids, outputs.sequences, alignments)
 
-    def get_alignments(self, pred_outputs, top_k=10):
-        attentions = [
-            xattn[-1].mean(dim=1)[:, 0]  # (output_len, input_len)
-            for xattn in pred_outputs.cross_attentions
-        ]
+    def get_alignments(self, pred_outputs, prompt_len, top_k=10):
+        all_attns = pred_outputs.attentions
+        last_layer_attn = all_attns[-1]
+        avg_attn = last_layer_attn.mean(dim=1)[0]
 
-        out_seq_len = pred_outputs.sequences.shape[-1]
+        total_len = avg_attn.size(0)
         aligned_tokens = []
 
-        for out_idx in range(out_seq_len):
-            if out_idx >= len(attentions):
-                break
-
-            # Get attention weights for this output token
-            alignment = attentions[out_idx][0]  # (input_len,)
-
-            # Get top-k input indices by attention
-            top_indices = alignment.topk(top_k).indices.tolist()
-
+        for out_idx in range(prompt_len, total_len):
+            attention_to_prompt = avg_attn[out_idx, :prompt_len]
+            top_indices = attention_to_prompt.topk(top_k).indices.tolist()
             aligned_tokens.append(top_indices)
 
         return aligned_tokens
@@ -237,8 +229,8 @@ class QwenModel(Model):
         with torch.no_grad():
             prompt = self.prepare_prompt(
                 instance.source,
-                instance.source_lang,
-                instance.target_lang
+                instance.source_lang.value,
+                instance.target_lang.value
             )
             tokenized_input = self.tokenize(prompt)
 
