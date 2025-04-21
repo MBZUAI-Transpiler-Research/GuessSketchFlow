@@ -62,6 +62,15 @@ class UniAssemblyListener(ParseTreeListener):
         pass
 
 
+    # Enter a parse tree produced by UniAssemblyParser#segmented_memory_operand.
+    def enterSegmented_memory_operand(self, ctx:UniAssemblyParser.Segmented_memory_operandContext):
+        pass
+
+    # Exit a parse tree produced by UniAssemblyParser#segmented_memory_operand.
+    def exitSegmented_memory_operand(self, ctx:UniAssemblyParser.Segmented_memory_operandContext):
+        pass
+
+
     # Enter a parse tree produced by UniAssemblyParser#memory_operand.
     def enterMemory_operand(self, ctx:UniAssemblyParser.Memory_operandContext):
         pass

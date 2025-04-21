@@ -5,8 +5,9 @@ import time
 from functools import wraps
 from typing import Dict, List, Optional, Union, Callable, TypeVar
 import warnings
+
+import gc
 import torch
-from tqdm.auto import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from src.helpers.dataset import DatasetInstance
@@ -56,34 +57,24 @@ class QwenModel(Model):
             device: device_map argument for loading models (usually "auto").
         """
         logger.info(
-            f"Initializing QwenModel with {model_name} on device {device}")
+            f"Initializing QwenModel with {model_name} on device {device}"
+        )
 
         start_time = time.time()
-        with tqdm(total=3, desc="Model Initialization") as pbar:
-            # Load model
-            self.model = AutoModelForCausalLM.from_pretrained(
-                model_name,
-                torch_dtype=torch.bfloat16,
-                device_map="auto",
-            ).to(torch.device(device))
-            pbar.update(1)
+        # Load model
+        self.model = AutoModelForCausalLM.from_pretrained(
+            model_name,
+            torch_dtype=torch.bfloat16,
+            device_map="auto",
+        ).to(torch.device(device))
 
-            # Load tokenizer
-            tokenizer = AutoTokenizer.from_pretrained(model_name)
-            pbar.update(1)
+        # Load tokenizer
+        tokenizer = AutoTokenizer.from_pretrained(model_name)
 
-            # Setup model
-            device_resolved = self.model.device
-            super().__init__(tokenizer, device=device_resolved)
-            self.model.eval()
-
-            # Suppress pad_token_id warnings
-            warnings.filterwarnings(
-                "ignore",
-                category=UserWarning,
-                message=".*pad_token_id*"
-            )
-            pbar.update(1)
+        # Setup model
+        device_resolved = self.model.device
+        super().__init__(tokenizer, device=device_resolved)
+        self.model.eval()
 
         elapsed_time = time.time() - start_time
         logger.info(
@@ -202,19 +193,23 @@ class QwenModel(Model):
         )
         alignments = self.get_alignments(outputs, input_tokens.input_ids.shape[1])
 
-        return (input_tokens.input_ids, outputs.sequences, alignments)
+        return (input_tokens.input_ids, outputs.sequences[:, input_tokens.input_ids.shape[1]:], alignments)
 
     def get_alignments(self, pred_outputs, prompt_len, top_k=10):
-        all_attns = pred_outputs.attentions
-        last_layer_attn = all_attns[-1]
-        avg_attn = last_layer_attn.mean(dim=1)[0]
+        attentions = [
+            attn[-1].mean(dim=1)[:, 0]  # Mean over heads, then get last token's attention
+            for attn in pred_outputs.attentions
+        ]
 
-        total_len = avg_attn.size(0)
+        out_seq_len = pred_outputs.sequences.shape[-1] - prompt_len
         aligned_tokens = []
 
-        for out_idx in range(prompt_len, total_len):
-            attention_to_prompt = avg_attn[out_idx, :prompt_len]
-            top_indices = attention_to_prompt.topk(top_k).indices.tolist()
+        for out_idx in range(out_seq_len):
+            if out_idx >= len(attentions):
+                break
+
+            alignment = attentions[out_idx][0]
+            top_indices = alignment.topk(top_k).indices.tolist()
             aligned_tokens.append(top_indices)
 
         return aligned_tokens

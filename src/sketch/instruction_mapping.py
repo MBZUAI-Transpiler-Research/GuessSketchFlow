@@ -65,12 +65,34 @@ arm64_mapping = {
     "bgt":     (InstructionType.BRANCHING, "branch_gt"),
 }
 
+x86_mapping = {
+    "addl":     (InstructionType.ARITHMETIC, "add"),
+    "subl":     (InstructionType.ARITHMETIC, "subtract"),
+    "addq":     (InstructionType.ARITHMETIC, "add"),
+    "xorl":     (InstructionType.ARITHMETIC, "xor"),
+    "movl":     (InstructionType.ARITHMETIC, "move"),
+    "movq":     (InstructionType.ARITHMETIC, "move"),
+    "movslq":   (InstructionType.ARITHMETIC, "sign_extend"),
+
+    "pushq":    (InstructionType.SYSTEM, "push"),
+    "leave":    (InstructionType.SYSTEM, "leave"),
+    "ret":      (InstructionType.SYSTEM, "return"),
+    "endbr64":  (InstructionType.SYSTEM, "end_branch"),
+
+    "jmp":      (InstructionType.BRANCHING, "jump"),
+    "call":     (InstructionType.BRANCHING, "call"),
+    "je":       (InstructionType.BRANCHING, "branch_eq"),
+    "jne":      (InstructionType.BRANCHING, "branch_ne"),
+}
+
 
 def get_mappings_for_lang(lang: str):
     if lang == "riscv":
         return riscv_mapping
     elif lang == "arm64":
         return arm64_mapping
+    elif lang == "x86":
+        return x86_mapping
     else:
         raise NotImplementedError(
             f"Mappings for lang {lang} are not supported yet"

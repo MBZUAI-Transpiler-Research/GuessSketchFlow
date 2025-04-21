@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 
-from z3 import is_eq
 from src.sketch.pure_blocks import is_pure_line, PureInstructionBlock
 from src.sketch.compare_helpers import compare_line_instructions
 from typing import List, Tuple, Dict

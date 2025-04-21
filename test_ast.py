@@ -41,4 +41,9 @@ def parse_assembly(input_text: str):
         return None
 
 
-print(parse_assembly('{main3}{test2} .main:'))
+# movq	%fs:40, %rax
+# movq	(%rax), %rax
+# subq	%fs:40, %rdx
+print(parse_assembly('movq	(%rax), %rax'))
+print(parse_assembly('movl	$1, %edi'))
+print(parse_assembly('ldrsw	x2, [sp, #28]'))

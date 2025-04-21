@@ -8,7 +8,7 @@ model:
   name: "qwen:ahmedheakl/asm2asm_1.5B_armv8_O0"
   is_enc_dec: false
   checkpoint: "..." 
-  max_length: 1000
+  max_length: 4096
 
 # Inference Configuration
 inference:

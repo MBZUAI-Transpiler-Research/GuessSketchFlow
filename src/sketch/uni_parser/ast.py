@@ -54,6 +54,12 @@ class MemoryOperand(Operand):
 
 
 @dataclass
+class SegmentedMemoryOperand(Operand):
+    base: str
+    offset: str
+
+
+@dataclass
 class Instruction:
     name: str
     operands: List[Operand]
@@ -120,6 +126,8 @@ class ASTListener(UniAssemblyListener):
         base = ctx.REGISTER().getText()
         if ctx.NUMBER():
             offset = int(ctx.NUMBER().getText())
+        elif ctx.IMMEDIATE():
+            offset = int(ctx.IMMEDIATE().getText()[1:])
         elif ctx.relocation_expr():
             parts = [t.getText() for t in ctx.relocation_expr().getChildren()]
             offset = RelocationExpr(modifier=parts[2], symbol=parts[4])
@@ -166,6 +174,15 @@ class ASTListener(UniAssemblyListener):
 
         elif ctx.memory_operand():
             self._handle_memory(ctx.memory_operand())
+
+        elif ctx.segmented_memory_operand():
+            parts = [t.getText()
+                     for t in ctx.segmented_memory_operand().getChildren()]
+            self._push_operand(
+                SegmentedMemoryOperand(
+                    base=parts[0], offset=parts[2]
+                )
+            )
 
         elif ctx.SYMBOL():
             self._push_operand(Symbol(name=text))

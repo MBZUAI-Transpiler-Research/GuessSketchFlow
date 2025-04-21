@@ -5,14 +5,10 @@ translations using configurable models. It supports multiple model types and
 handles both function-level and cloze-style translations.
 """
 
-import gc
-import json
 from typing import List
 from enum import Enum
 from pathlib import Path
 from typing import Dict
-
-import torch
 
 from src.config import Config
 from src.helpers.model import Model, InferenceConfig, PredictionResult
@@ -70,7 +66,7 @@ class Guess:
             model_name = model_name.split(":")[1]
             print(f"Loading Qwen model: {model_name}")
             self.model: Model = QwenModel(
-                model_name=model_name, device="cpu"
+                model_name=model_name, device="mps"
             )
         elif "bart" in model_name:
             print(f"Loading BART model: {self.config.model_name}")

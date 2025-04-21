@@ -86,12 +86,38 @@ z3_exec_arm64 = {
     ),
 }
 
+z3_exec_x86 = {
+    "addl": lambda state, args: state.__setitem__(
+        args[0].name, resolve_operand(state, args[1]) + resolve_operand(state, args[2])
+    ),
+    "addq": lambda state, args: state.__setitem__(
+        args[0].name, resolve_operand(state, args[1]) + resolve_operand(state, args[2])
+    ),
+    "subl": lambda state, args: state.__setitem__(
+        args[0].name, resolve_operand(state, args[1]) - resolve_operand(state, args[2])
+    ),
+    "xorl": lambda state, args: state.__setitem__(
+        args[0].name, resolve_operand(state, args[1]) ^ resolve_operand(state, args[2])
+    ),
+    "movl": lambda state, args: state.__setitem__(
+        args[0].name, resolve_operand(state, args[1])
+    ),
+    "movq": lambda state, args: state.__setitem__(
+        args[0].name, resolve_operand(state, args[1])
+    ),
+    "movslq": lambda state, args: state.__setitem__(
+        args[0].name, sext32(resolve_operand(state, args[1]))
+    ),
+}
+
 
 def get_z3_mappings_for_lang(lang: str):
     if lang == "riscv":
         return z3_exec_riscv
     elif lang == "arm64":
         return z3_exec_arm64
+    elif lang == "x86":
+        return z3_exec_x86
     else:
         raise NotImplementedError(
             f"Mappings for lang {lang} are not supported yet"

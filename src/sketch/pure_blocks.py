@@ -16,7 +16,9 @@ class PureInstructionBlock:
 def is_pure_line(line: str, lang: str) -> bool:
     try:
         parsed_assembly = parse_assembly(line)
+
         if not parsed_assembly:
+            print(f"Failed to parse line: {line}")
             return False
 
         instr = parsed_assembly[0]
@@ -34,5 +36,6 @@ def is_pure_line(line: str, lang: str) -> bool:
 
         return True
 
-    except Exception:
+    except Exception as e:
+        print(f"Failed to parse line: {line}\nError: {str(e)}")
         return False
