@@ -1,6 +1,8 @@
 levenshtein
 datasets
 evaluate
+z3-solver
+antlr4-python3-runtime
 streamlit
 st-annotated-text
 htbuilder
