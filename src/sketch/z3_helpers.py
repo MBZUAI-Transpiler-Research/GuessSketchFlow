@@ -88,25 +88,25 @@ z3_exec_arm64 = {
 
 z3_exec_x86 = {
     "addl": lambda state, args: state.__setitem__(
-        args[0].name, resolve_operand(state, args[1]) + resolve_operand(state, args[2])
+        args[1].name, resolve_operand(state, args[1]) + resolve_operand(state, args[0])
     ),
     "addq": lambda state, args: state.__setitem__(
-        args[0].name, resolve_operand(state, args[1]) + resolve_operand(state, args[2])
+        args[1].name, resolve_operand(state, args[1]) + resolve_operand(state, args[0])
     ),
     "subl": lambda state, args: state.__setitem__(
-        args[0].name, resolve_operand(state, args[1]) - resolve_operand(state, args[2])
+        args[1].name, resolve_operand(state, args[1]) - resolve_operand(state, args[0])
     ),
     "xorl": lambda state, args: state.__setitem__(
-        args[0].name, resolve_operand(state, args[1]) ^ resolve_operand(state, args[2])
+        args[1].name, resolve_operand(state, args[1]) ^ resolve_operand(state, args[0])
     ),
     "movl": lambda state, args: state.__setitem__(
-        args[0].name, resolve_operand(state, args[1])
+        args[1].name, resolve_operand(state, args[0])
     ),
     "movq": lambda state, args: state.__setitem__(
-        args[0].name, resolve_operand(state, args[1])
+        args[1].name, resolve_operand(state, args[0])
     ),
     "movslq": lambda state, args: state.__setitem__(
-        args[0].name, sext32(resolve_operand(state, args[1]))
+        args[1].name, sext32(resolve_operand(state, args[0]))
     ),
 }
 
@@ -124,7 +124,7 @@ def get_z3_mappings_for_lang(lang: str):
         )
 
 
-def extract_block_info(instructions: List[Instruction]) -> Z3InstructionBlock:
+def extract_block_info(instructions: List[Instruction], block_lang: str) -> Z3InstructionBlock:
     defined: Set[str] = set()
     input_regs: Set[str] = set()
     output_reg: str = None
@@ -135,8 +135,17 @@ def extract_block_info(instructions: List[Instruction]) -> Z3InstructionBlock:
         if not instr.operands:
             continue
 
-        dst = instr.operands[0]
-        srcs = instr.operands[1:]
+        if block_lang == "riscv":
+            dst = instr.operands[0]
+            srcs = instr.operands[1:]
+        elif block_lang == "arm64":
+            dst = instr.operands[0]
+            srcs = instr.operands[1:]
+        elif block_lang == "x86":
+            dst = instr.operands[-1]
+            srcs = instr.operands[:-1]
+        else:
+            raise ValueError(f"Unsupported block language: {block_lang}")
 
         for src in srcs:
             if isinstance(src, Register) and src.name not in defined:

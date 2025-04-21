@@ -244,8 +244,8 @@ class Sketch:
         source_instructions = parse_assembly(source_text)
         pred_instructions = parse_assembly(pred_text)
 
-        source_z3_block = extract_block_info(source_instructions)
-        pred_z3_block = extract_block_info(pred_instructions)
+        source_z3_block = extract_block_info(source_instructions, self.config.source_lang)
+        pred_z3_block = extract_block_info(pred_instructions, self.config.target_lang)
 
         invalid_blocks = []
         non_equivalent_blocks = []
