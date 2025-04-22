@@ -46,7 +46,7 @@ def parse_assembly(input_text: str):
 # movq	%fs:40, %rax
 # movq	(%rax), %rax
 # subq	%fs:40, %rdx
-print(parse_assembly('ands w8, w8, #0x1'))
+print(parse_assembly('LBB1_4:'))
 # print(parse_assembly('movq	(%rax), %rax'))
 # print(parse_assembly('movl	$1, %edi'))
 print(parse_assembly('mov w1, #0'))

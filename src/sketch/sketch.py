@@ -6,7 +6,9 @@ from typing import List, Tuple, Dict
 from src.config import Config
 from src.helpers.model import Model, PredictionResult
 from src.sketch.uni_parser import parse_assembly
+from src.sketch.uni_parser.ast import Label
 from src.sketch.z3_helpers import blocks_equivalent_z3, extract_block_info, is_valid_block_pair
+from src.sketch.sections import Section
 
 
 @dataclass
@@ -21,67 +23,38 @@ class Sketch:
         self.config = config
         self.model = model
 
+    def get_line_spans(self, line_end_indices):
+        spans = []
+        start = 0
+        for end in line_end_indices:
+            spans.append((start, end))
+            start = end
+        return spans
+
     def get_line_end_tokenized_indices(self, tokenized_sequence):
-        if type(tokenized_sequence[0]) == list:
-            tokenized_sequence = tokenized_sequence[0]
-        decoded_seq = self.model.tokenizer.decode(
-            tokenized_sequence, skip_special_tokens=False
+        tokens = (
+            tokenized_sequence[0]
+            if isinstance(tokenized_sequence[0], list)
+            else tokenized_sequence
         )
-        char_to_tokenized_tok = {
-            len(self.model.tokenizer.decode(tokenized_sequence[: idx + 1])): idx
-            for idx in range(len(tokenized_sequence))
-        }
 
-        line_end_idxes = []
-        reconstruct = ""
-        seq_lines = decoded_seq.splitlines(True)
-
-        for line in seq_lines:
-            reconstruct += line
-            if line[-1] == "\n":
-                char_idx = len(reconstruct) - 1
-            else:
-                char_idx = len(reconstruct)
-            while char_idx not in char_to_tokenized_tok:
-                char_idx += 1
-                if char_idx > len(char_to_tokenized_tok):
-                    return line_end_idxes
-            line_end_idxes.append(
-                char_to_tokenized_tok[char_idx] + 1)  # +1 bc endidx
-
-        return line_end_idxes
+        line_end_indices = []
+        for i, token_id in enumerate(tokens):
+            decoded = self.model.tokenizer.decode([token_id])
+            if "\n" in decoded:
+                line_end_indices.append(i + 1)
+        return line_end_indices
 
     def map_predicted_lines_to_source_lines(self, input_ids, output_ids, aligned_tokens, top_k=10, vote_threshold=1):
-        input_text = self.model.tokenizer.decode(
-            input_ids[0], skip_special_tokens=True
-        )
-        output_text = self.model.tokenizer.decode(
-            output_ids[0], skip_special_tokens=True
-        )
-
         input_line_ends = self.get_line_end_tokenized_indices(input_ids[0])
         output_line_ends = self.get_line_end_tokenized_indices(output_ids[0])
 
-        def get_line_spans(line_end_indices):
-            spans = []
-            start = 0
-            for end in line_end_indices:
-                spans.append((start, end))
-                start = end
-            return spans
-
-        input_line_spans = get_line_spans(input_line_ends)
-        output_line_spans = get_line_spans(output_line_ends)
-
-        input_lines = input_text.splitlines()
-        output_lines = output_text.splitlines()
+        input_line_spans = self.get_line_spans(input_line_ends)
+        output_line_spans = self.get_line_spans(output_line_ends)
 
         line_mapping = []
 
         for i, (out_start, out_end) in enumerate(output_line_spans):
-            if i >= len(output_lines):
-                break
-
             contributing_input_tokens = set()
             for j in range(out_start, out_end):
                 if j < len(aligned_tokens):
@@ -105,16 +78,20 @@ class Sketch:
             best_match = None
 
             for idx in top_lines:
-                if idx < len(input_lines):
-                    score = compare_line_instructions(
-                        output_lines[i],
-                        input_lines[idx],
-                        self.config.target_lang,
-                        self.config.source_lang
-                    )
-                    if score > best_score:
-                        best_score = score
-                        best_match = idx
+                in_start, in_end = input_line_spans[idx]
+
+                output_line = self.model.tokenizer.decode(output_ids[0][out_start:out_end])
+                input_line = self.model.tokenizer.decode(input_ids[0][in_start:in_end])
+
+                score = compare_line_instructions(
+                    output_line,
+                    input_line,
+                    self.config.target_lang,
+                    self.config.source_lang
+                )
+                if score > best_score:
+                    best_score = score
+                    best_match = idx
 
             if best_score > 0.0:
                 line_mapping.append((i, best_match))
@@ -123,32 +100,45 @@ class Sketch:
 
         return line_mapping
 
+    def extract_sections(self, output_ids) -> List[Section]:
+        output_line_ends = self.get_line_end_tokenized_indices(output_ids[0])
+        output_line_spans = self.get_line_spans(output_line_ends)
+
+        sections = []
+        current_section = None
+
+        for i, (line_start, line_end) in enumerate(output_line_spans):
+            line = self.model.tokenizer.decode(output_ids[0][line_start:line_end])
+            ast = parse_assembly(line)
+
+            if not ast:
+                continue
+
+            if isinstance(ast[0], Label):
+                if current_section:
+                    sections.append(current_section)
+
+                current_section = Section(
+                    name=ast[0].name,
+                    start=line_start,
+                    end=line_end
+                )
+            elif current_section:
+                current_section.end = line_end
+
+        if current_section:
+            sections.append(current_section)
+
+        return sections
+
     def extract_pure_instruction_blocks(
         self, input_ids, output_ids, line_mapping
     ) -> List[PureInstructionBlock]:
-        input_text = self.model.tokenizer.decode(
-            input_ids[0], skip_special_tokens=True
-        )
-        output_text = self.model.tokenizer.decode(
-            output_ids[0], skip_special_tokens=True
-        )
-
-        input_lines = input_text.splitlines()
-        output_lines = output_text.splitlines()
-
         input_line_ends = self.get_line_end_tokenized_indices(input_ids[0])
         output_line_ends = self.get_line_end_tokenized_indices(output_ids[0])
 
-        def get_line_spans(line_end_indices):
-            spans = []
-            start = 0
-            for end in line_end_indices:
-                spans.append((start, end))
-                start = end
-            return spans
-
-        input_line_spans = get_line_spans(input_line_ends)
-        output_line_spans = get_line_spans(output_line_ends)
+        input_line_spans = self.get_line_spans(input_line_ends)
+        output_line_spans = self.get_line_spans(output_line_ends)
 
         seen_preds = set()
         blocks = []
@@ -157,8 +147,14 @@ class Sketch:
             if i in seen_preds or src_idx is None:
                 continue
 
+            out_start, out_end = output_line_spans[i]
+            in_start, in_end = input_line_spans[src_idx]
+
+            output_line = self.model.tokenizer.decode(output_ids[0][out_start:out_end])
+            input_line = self.model.tokenizer.decode(input_ids[0][in_start:in_end])
+
             # Skip non-pure lines
-            if not is_pure_line(output_lines[i], self.config.target_lang) or not is_pure_line(input_lines[src_idx], self.config.source_lang):
+            if not is_pure_line(output_line, self.config.target_lang) or not is_pure_line(input_line, self.config.source_lang):
                 continue
 
             # Expand up and down from current line
@@ -169,14 +165,19 @@ class Sketch:
 
             # Go up
             while pred_start > 0 and src_start > 0:
+                out_start, out_end = output_line_spans[pred_start - 1]
+                in_start, in_end = input_line_spans[src_start - 1]
+                output_line = self.model.tokenizer.decode(output_ids[0][out_start:out_end])
+                input_line = self.model.tokenizer.decode(input_ids[0][in_start:in_end])
+
                 score = compare_line_instructions(
-                    output_lines[pred_start - 1],
-                    input_lines[src_start - 1],
+                    output_line,
+                    input_line,
                     self.config.target_lang,
                     self.config.source_lang
                 )
 
-                if is_pure_line(output_lines[pred_start - 1], self.config.target_lang) and is_pure_line(input_lines[src_start - 1], self.config.source_lang) and score > 0.2:
+                if is_pure_line(output_line, self.config.target_lang) and is_pure_line(input_line, self.config.source_lang) and score > 0.2:
                     pred_start -= 1
                     src_start -= 1
                     seen_preds.add(pred_start)
@@ -184,15 +185,20 @@ class Sketch:
                     break
 
             # Go down
-            while pred_end < len(output_lines) and src_end < len(input_lines):  
+            while pred_end < len(output_line_spans) and src_end < len(input_line_spans):  
+                out_start, out_end = output_line_spans[pred_end]
+                in_start, in_end = input_line_spans[src_end]
+                output_line = self.model.tokenizer.decode(output_ids[0][out_start:out_end])
+                input_line = self.model.tokenizer.decode(input_ids[0][in_start:in_end])
+
                 score = compare_line_instructions(
-                    output_lines[pred_end],
-                    input_lines[src_end],
+                    output_line,
+                    input_line,
                     self.config.target_lang,
                     self.config.source_lang
                 )
 
-                if is_pure_line(output_lines[pred_end], self.config.target_lang) and is_pure_line(input_lines[src_end], self.config.source_lang) and score > 0.2:
+                if is_pure_line(output_line, self.config.target_lang) and is_pure_line(input_line, self.config.source_lang) and score > 0.2:
                     seen_preds.add(pred_end)
                     pred_end += 1
                     src_end += 1
