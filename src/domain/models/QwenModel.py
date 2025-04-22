@@ -189,7 +189,6 @@ class QwenModel(Model):
             output_attentions=True,
             return_dict_in_generate=True,
             output_scores=True,
-            no_repeat_ngram_size=0,
         )
         alignments = self.get_alignments(outputs, input_tokens.input_ids.shape[1])
 
