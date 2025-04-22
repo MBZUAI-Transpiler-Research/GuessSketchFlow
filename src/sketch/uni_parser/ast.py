@@ -159,6 +159,10 @@ class ASTListener(UniAssemblyListener):
             value = int(ctx.IMMEDIATE().getText()[1:])  # strip leading #
             self._push_operand(Immediate(value=value))
 
+        elif ctx.BINARY_IMMEDIATE():
+            value = int(ctx.BINARY_IMMEDIATE().getText()[3:], 16)
+            self._push_operand(Immediate(value=value))
+
         elif ctx.STRING():
             self._push_operand(Symbol(name=text.strip('"')))
 

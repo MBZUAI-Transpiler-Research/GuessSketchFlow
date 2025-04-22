@@ -43,6 +43,8 @@ arm64_mapping = {
     "sub":     (InstructionType.ARITHMETIC, "subtract"),
     "lsl":     (InstructionType.ARITHMETIC, "shift"),
     "mov":     (InstructionType.ARITHMETIC, "move"),
+    "and":     (InstructionType.ARITHMETIC, "and"),
+    "ands":    (InstructionType.ARITHMETIC, "and"),
 
     "nop":     (InstructionType.SYSTEM, "nop"),
 
@@ -63,6 +65,7 @@ arm64_mapping = {
     "beq":     (InstructionType.BRANCHING, "branch_eq"),
     "bne":     (InstructionType.BRANCHING, "branch_ne"),
     "bgt":     (InstructionType.BRANCHING, "branch_gt"),
+    "cset":    (InstructionType.BRANCHING, "condition_set")
 }
 
 x86_mapping = {

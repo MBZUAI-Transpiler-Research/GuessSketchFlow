@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Entry point for running the Guess module."""
 
+import pickle
 from src.guess.guess import ConfigType, Guess, Config
 from src.domain.datasets.UnixCommandDataset import UnixCommandDataset  # Register dataset
 from src.domain.datasets.ProjectEulerDataset import ProjectEulerDataset
@@ -12,6 +13,10 @@ if __name__ == "__main__":
     guess = Guess(config=config)
     predictions = guess.guess()
     print("Inference complete.")
+
+    with open("predictions.pkl", "wb") as f:
+        pickle.dump(predictions, f)
+
     metrics = guess.evaluate(predictions)
     print("Evaluation complete.")
     print(metrics)

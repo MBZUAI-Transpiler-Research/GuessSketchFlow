@@ -16,7 +16,9 @@ class LexerBailErrorListener(ErrorListener):
 
 
 def parse_assembly(input_text: str):
-    stream = InputStream(input_text)
+    cleaned_text = input_text.split(";")[0].strip()
+
+    stream = InputStream(cleaned_text)
 
     lexer = UniAssemblyLexer(stream)
     # lexer.removeErrorListeners()
@@ -44,6 +46,7 @@ def parse_assembly(input_text: str):
 # movq	%fs:40, %rax
 # movq	(%rax), %rax
 # subq	%fs:40, %rdx
-print(parse_assembly('movq	(%rax), %rax'))
-print(parse_assembly('movl	$1, %edi'))
-print(parse_assembly('ldrsw	x2, [sp, #28]'))
+print(parse_assembly('ands w8, w8, #0x1'))
+# print(parse_assembly('movq	(%rax), %rax'))
+# print(parse_assembly('movl	$1, %edi'))
+print(parse_assembly('mov w1, #0'))

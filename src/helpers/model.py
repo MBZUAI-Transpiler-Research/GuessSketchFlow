@@ -27,6 +27,15 @@ logger = logging.getLogger(__name__)
 T = TypeVar('T')
 
 
+def get_device() -> torch.device:
+    if torch.cuda.is_available():
+        return torch.device("cuda:0")
+    elif torch.backends.mps.is_available():
+        return torch.device("mps")
+    
+    return torch.device("cpu")
+
+
 def log_execution_time(func: Callable[..., T]) -> Callable[..., T]:
     """Decorator to log function execution time."""
     @wraps(func)

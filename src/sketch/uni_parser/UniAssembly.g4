@@ -66,12 +66,13 @@ operand
     | expression
     | NUMBER
     | IMMEDIATE
+    | BINARY_IMMEDIATE
     | SYMBOL
     | DOT_SYMBOL
     | STRING
     ;
 
-REGISTER: 'x' [0-9]+ | 'r' [0-9]+ | 'a' [0-9]+ | 's' [0-9]+ | 'sp' | '%' (
+REGISTER: 'x' [0-9]+ | 'r' [0-9]+ | 'a' [0-9]+ | 's' [0-9]+ | 'w' [0-9]+ | 'sp' | '%' (
     // 64-bit general-purpose registers
     'r' ( 'ax' | 'bx' | 'cx' | 'dx' | 'si' | 'di' | 'sp' | 'bp' )
     | 'r' [8-9]
@@ -104,6 +105,7 @@ SYMBOL: [a-zA-Z_@%][a-zA-Z0-9_@.-]*;
 DOT_SYMBOL: '.'? [a-zA-Z_][a-zA-Z0-9_@.-]*;
 
 IMMEDIATE: '#' [0-9]+ | '$' [0-9]+;
+BINARY_IMMEDIATE: '#0x' [0-9]+;
 NUMBER: '-'? [0-9]+;
 
 STRING: '"' (~["\r\n] | '\\' .)* '"';

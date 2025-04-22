@@ -127,9 +127,11 @@ class Sketch:
         self, input_ids, output_ids, line_mapping
     ) -> List[PureInstructionBlock]:
         input_text = self.model.tokenizer.decode(
-            input_ids[0], skip_special_tokens=True)
+            input_ids[0], skip_special_tokens=True
+        )
         output_text = self.model.tokenizer.decode(
-            output_ids[0], skip_special_tokens=True)
+            output_ids[0], skip_special_tokens=True
+        )
 
         input_lines = input_text.splitlines()
         output_lines = output_text.splitlines()
@@ -167,7 +169,14 @@ class Sketch:
 
             # Go up
             while pred_start > 0 and src_start > 0:
-                if is_pure_line(output_lines[pred_start - 1], self.config.target_lang) and is_pure_line(input_lines[src_start - 1], self.config.source_lang):
+                score = compare_line_instructions(
+                    output_lines[pred_start - 1],
+                    input_lines[src_start - 1],
+                    self.config.target_lang,
+                    self.config.source_lang
+                )
+
+                if is_pure_line(output_lines[pred_start - 1], self.config.target_lang) and is_pure_line(input_lines[src_start - 1], self.config.source_lang) and score > 0.2:
                     pred_start -= 1
                     src_start -= 1
                     seen_preds.add(pred_start)
@@ -175,8 +184,15 @@ class Sketch:
                     break
 
             # Go down
-            while pred_end < len(output_lines) and src_end < len(input_lines):
-                if is_pure_line(output_lines[pred_end], self.config.target_lang) and is_pure_line(input_lines[src_end], self.config.source_lang):
+            while pred_end < len(output_lines) and src_end < len(input_lines):  
+                score = compare_line_instructions(
+                    output_lines[pred_end],
+                    input_lines[src_end],
+                    self.config.target_lang,
+                    self.config.source_lang
+                )
+
+                if is_pure_line(output_lines[pred_end], self.config.target_lang) and is_pure_line(input_lines[src_end], self.config.source_lang) and score > 0.2:
                     seen_preds.add(pred_end)
                     pred_end += 1
                     src_end += 1

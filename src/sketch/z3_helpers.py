@@ -19,6 +19,10 @@ def sext32(expr):
     return SignExt(32, Extract(31, 0, expr))
 
 
+def zext32(expr):
+    return ZeroExt(32, Extract(31, 0, expr))
+
+
 def bv_mask32(expr):
     return expr & BitVecVal(0xffffffff, 64)
 
@@ -84,6 +88,12 @@ z3_exec_arm64 = {
     "mov": lambda state, args: state.__setitem__(
         args[0].name, resolve_operand(state, args[1])
     ),
+    "and": lambda state, args: state.__setitem__(
+        args[0].name, resolve_operand(state, args[1]) & resolve_operand(state, args[2])
+    ),
+    "ands": lambda state, args: state.__setitem__(
+        args[0].name, resolve_operand(state, args[1]) & resolve_operand(state, args[2])
+    ),
 }
 
 z3_exec_x86 = {
@@ -100,7 +110,7 @@ z3_exec_x86 = {
         args[1].name, resolve_operand(state, args[1]) ^ resolve_operand(state, args[0])
     ),
     "movl": lambda state, args: state.__setitem__(
-        args[1].name, resolve_operand(state, args[0])
+        args[1].name, zext32(resolve_operand(state, args[0]))
     ),
     "movq": lambda state, args: state.__setitem__(
         args[1].name, resolve_operand(state, args[0])

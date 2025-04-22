@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Dict
 
 from src.config import Config
-from src.helpers.model import Model, InferenceConfig, PredictionResult
+from src.helpers.model import Model, InferenceConfig, PredictionResult, get_device
 from src.domain.models.QwenModel import QwenModel
 from src.domain.models.BartLargeModel import BartLargeModel
 from src.helpers.dataset import Dataset, DatasetConfig
@@ -66,12 +66,12 @@ class Guess:
             model_name = model_name.split(":")[1]
             print(f"Loading Qwen model: {model_name}")
             self.model: Model = QwenModel(
-                model_name=model_name, device="mps"
+                model_name=model_name, device=get_device()
             )
         elif "bart" in model_name:
             print(f"Loading BART model: {self.config.model_name}")
             self.model: Model = BartLargeModel(
-                model_name=self.config.model_name, device="mps"
+                model_name=self.config.model_name, device=get_device()
             )
         else:
             raise ValueError(f"Unknown model type in {self.config.model_name}")
