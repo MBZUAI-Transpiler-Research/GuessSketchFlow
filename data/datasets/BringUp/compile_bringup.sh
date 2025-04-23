@@ -109,7 +109,6 @@ compile_task() {
         for file in "${required_files[@]}"; do
             if [ -f "$file" ]; then
                 main_c_file="$file"
-                break
             fi
         done
     fi
