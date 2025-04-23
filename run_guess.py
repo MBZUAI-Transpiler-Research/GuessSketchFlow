@@ -5,6 +5,7 @@ import pickle
 from src.guess.guess import ConfigType, Guess, Config
 from src.domain.datasets.UnixCommandDataset import UnixCommandDataset  # Register dataset
 from src.domain.datasets.ProjectEulerDataset import ProjectEulerDataset
+from src.domain.datasets.BringUpDataset import BringUpDataset
 from src.sketch.sketch import Sketch  # Register dataset
 
 if __name__ == "__main__":

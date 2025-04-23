@@ -26,7 +26,7 @@ language:
 
 # Data Configuration
 dataset:
-  name: "unix_commands"
+  name: "bringup"
   gcc_args: "..."
   additional_notes: "..."
 

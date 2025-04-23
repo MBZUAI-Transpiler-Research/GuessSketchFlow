@@ -1,40 +1,33 @@
 import os
+import logging
 import json
 import subprocess
 from typing import List, Dict, Any, Optional
 
-from src.domain.datasets.Dataset import Dataset
-from src.domain.datasets.DatasetInstance import DatasetInstance
-from src.helpers.dataset import register_dataset
-from src.helpers.logging import get_logger
+from src.helpers.dataset import Dataset, DatasetInstance, AssemblyLanguage, DatasetConfig
 
 
-@register_dataset("bringup")
+@Dataset.register("bringup")
 class BringUpDataset(Dataset):
     """Dataset for BringUp tasks
     
     The BringUp dataset consists of various C programming tasks that are compiled
-    to both RISC-V and ARM assembly code. This dataset is used to evaluate the
+    to both x86 and ARM64 assembly code. This dataset is used to evaluate the
     model's ability to translate between different assembly languages.
     """
     
-    def __init__(self, dataset_path: str, **kwargs):
-        super().__init__(dataset_path, **kwargs)
-        self.logger = get_logger(self.__class__.__name__)
+    def __init__(self, config: DatasetConfig, **kwargs):
+        super().__init__(config, **kwargs)
+        self.dataset_path = "data/datasets/BringUp"
+        self.logger = logging.getLogger(__name__)
         
         # Define paths for processed data
-        self.riscv_jsonl = os.path.join("data", "processed", "RISCV", "BringUp_risc.jsonl")
-        self.arm_jsonl = os.path.join("data", "processed", "ARM64", "BringUp_arm.jsonl")
+        self.x86_jsonl = os.path.join("data", "processed", "x86", "BringUp_x86.jsonl")
+        self.arm64_jsonl = os.path.join("data", "processed", "ARM64", "BringUp_arm64.jsonl")
         
         # Validate architectures
-        self.source_arch = kwargs.get("source_arch", "arm")
-        self.target_arch = kwargs.get("target_arch", "risc")
-        
-        if self.source_arch not in ["arm", "risc"]:
-            raise ValueError(f"Invalid source architecture: {self.source_arch}. Must be 'arm' or 'risc'.")
-        
-        if self.target_arch not in ["arm", "risc"]:
-            raise ValueError(f"Invalid target architecture: {self.target_arch}. Must be 'arm' or 'risc'.")
+        self.source_arch = kwargs.get("source_arch", "x86")
+        self.target_arch = kwargs.get("target_arch", "arm64")
         
         if self.source_arch == self.target_arch:
             raise ValueError(f"Source and target architectures must be different.")
@@ -48,13 +41,13 @@ class BringUpDataset(Dataset):
         instances = []
         
         # Check if JSONL files exist
-        if not os.path.exists(self.riscv_jsonl) or not os.path.exists(self.arm_jsonl):
+        if not os.path.exists(self.x86_jsonl) or not os.path.exists(self.arm64_jsonl):
             self.logger.warning(f"JSONL files not found. Running compilation script...")
             self._compile_dataset()
         
         # Load data from JSONL files
-        source_jsonl = self.arm_jsonl if self.source_arch == "arm" else self.riscv_jsonl
-        target_jsonl = self.riscv_jsonl if self.target_arch == "risc" else self.arm_jsonl
+        source_jsonl = self.x86_jsonl 
+        target_jsonl = self.arm64_jsonl 
         
         source_data = {}
         target_data = {}
@@ -83,11 +76,11 @@ class BringUpDataset(Dataset):
                 target_code = target_entry[self.target_arch]
                 
                 instance = DatasetInstance(
-                    id=problem_id,
+                    instance_id=problem_id,
                     source=source_code,
                     target=target_code,
-                    source_language=self.source_arch,
-                    target_language=self.target_arch,
+                    source_lang=AssemblyLanguage(self.source_arch),
+                    target_lang=AssemblyLanguage(self.target_arch),
                     metadata={
                         "problem_id": problem_id,
                         "source_arch": self.source_arch,
@@ -160,7 +153,7 @@ class BringUpDataset(Dataset):
         # TODO: Implement proper evaluation by compiling the predicted assembly code
         # For now, we'll just count the number of non-empty predictions
         for i, (pred, instance) in enumerate(zip(predictions, instances)):
-            problem_id = instance.id
+            problem_id = instance.instance_id
             
             if pred.strip():
                 compile_success += 1
