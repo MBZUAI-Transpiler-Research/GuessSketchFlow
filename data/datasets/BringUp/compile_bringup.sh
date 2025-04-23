@@ -7,14 +7,17 @@ BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OUTPUT_DIR="${BASE_DIR}/../../processed"
 RISCV_DIR="${OUTPUT_DIR}/RISCV"
 ARM_DIR="${OUTPUT_DIR}/ARM64"
+X86_DIR="${OUTPUT_DIR}/X86"
 
 # Create output directories
 mkdir -p "${RISCV_DIR}"
 mkdir -p "${ARM_DIR}"
+mkdir -p "${X86_DIR}"
 
 # JSONL output files
 RISCV_JSONL="${RISCV_DIR}/BringUp_risc.jsonl"
 ARM_JSONL="${ARM_DIR}/BringUp_arm.jsonl"
+X86_JSONL="${X86_DIR}/BringUp_x86.jsonl"
 
 # Initialize JSONL files
 > "${RISCV_JSONL}"
@@ -87,6 +90,7 @@ compile_task() {
     # Output files
     local riscv_asm="${RISCV_DIR}/${task_name}.risc.s"
     local arm_asm="${ARM_DIR}/${task_name}.arm.s"
+    local x86_asm="${X86_DIR}/${task_name}.x86.s"
     
     cd $task_dir
     make -n TARGET=host clean build > "$OUTPUT_DIR/$task_name.makefile_output"
@@ -130,6 +134,9 @@ compile_task() {
     
     echo "  Compiling for ARM..."
     aarch64-unknown-linux-gnu-gcc -S "$main_c_file" -DTARGET_HOST $include_flags -o "$arm_asm" 2>/dev/null || touch "$arm_asm"
+
+    echo "  Compiling for X86..."
+    i686-unknown-linux-gnu-gcc -S "$main_c_file" -DTARGET_HOST $include_flags -o "$x86_asm" 2>/dev/null || touch "$x86_asm"
     
     # Create temporary files for JSON-safe content
     local temp_dir=$(mktemp -d)
@@ -137,25 +144,32 @@ compile_task() {
     
     local tmp_risc="$temp_dir/${task_name}.risc.json"
     local tmp_arm="$temp_dir/${task_name}.arm.json"
+    local tmp_x86="$temp_dir/${task_name}.x86.json"
     
     # Escape assembly content for JSON
     escape_json "$riscv_asm" > "$tmp_risc"
     escape_json "$arm_asm" > "$tmp_arm"
+    escape_json "$x86_asm" > "$tmp_x86"
     
     # Read the escaped content
     local riscv_content=$(cat "$tmp_risc")
     local arm_content=$(cat "$tmp_arm")
+    local x86_content=$(cat "$tmp_x86")
     
     # Create JSON entries
-    local riscv_json="{\"source\": \"${task_name}\", \"risc\": \"${riscv_content}\", \"risc_output\": \"\", \"risc_verbose\": \"${riscv_content}\"}"
-    local arm_json="{\"source\": \"${task_name}\", \"arm\": \"${arm_content}\", \"arm_output\": \"\", \"arm_verbose\": \"${arm_content}\"}"
+    local riscv_json="{\"source\": \"${task_name}\", \"risc\": \"${riscv_content}\", \"risc_output\": \"${riscv_content}\"}"
+    local arm_json="{\"source\": \"${task_name}\", \"arm\": \"${arm_content}\", \"arm_output\": \"${arm_content}\"}"
+    local x86_json="{\"source\": \"${task_name}\", \"x86\": \"${x86_content}\", \"x86_output\": \"${x86_content}\"}"
+
+    rm  "$OUTPUT_DIR/$task_name.makefile_output"
     
     # Append to JSONL files
     echo "$riscv_json" >> "$RISCV_JSONL"
     echo "$arm_json" >> "$ARM_JSONL"
+    echo "$x86_json" >> "$X86_JSONL"
     
     # Clean up assembly files
-    rm -f "$riscv_asm" "$arm_asm"
+    rm -f "$riscv_asm" "$arm_asm" "$x86_asm"
     
     echo "  Successfully processed $task_name"
     return 0
@@ -190,3 +204,4 @@ echo "Successfully compiled $successful_tasks out of $total_tasks tasks."
 echo "JSONL files created at:"
 echo "  RISC-V: $RISCV_JSONL"
 echo "  ARM: $ARM_JSONL"
+echo "  X86: $X86_JSONL"

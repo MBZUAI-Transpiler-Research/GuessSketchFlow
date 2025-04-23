@@ -3,6 +3,7 @@ import logging
 import json
 import subprocess
 from typing import List, Dict, Any, Optional
+from pathlib import Path
 
 from src.helpers.dataset import Dataset, DatasetInstance, AssemblyLanguage, DatasetConfig
 
@@ -10,165 +11,156 @@ from src.helpers.dataset import Dataset, DatasetInstance, AssemblyLanguage, Data
 @Dataset.register("bringup")
 class BringUpDataset(Dataset):
     """Dataset for BringUp tasks
-    
+
     The BringUp dataset consists of various C programming tasks that are compiled
     to both x86 and ARM64 assembly code. This dataset is used to evaluate the
     model's ability to translate between different assembly languages.
     """
-    
-    def __init__(self, config: DatasetConfig, **kwargs):
-        super().__init__(config, **kwargs)
-        self.dataset_path = "data/datasets/BringUp"
-        self.logger = logging.getLogger(__name__)
-        
-        # Define paths for processed data
-        self.x86_jsonl = os.path.join("data", "processed", "x86", "BringUp_x86.jsonl")
-        self.arm64_jsonl = os.path.join("data", "processed", "ARM64", "BringUp_arm64.jsonl")
-        
+
+    arch_suffix = {
+        'x86': 'x86',
+        'arm64': 'arm',
+        'riscv': 'risc'
+    }
+
+    def __init__(self, config: DatasetConfig):
+        super().__init__(config)
+        self.dataset_name = 'UnixCommands'
+        self.source_arch = config.source_lang
+        self.target_arch = config.target_lang
+
         # Validate architectures
-        self.source_arch = kwargs.get("source_arch", "x86")
-        self.target_arch = kwargs.get("target_arch", "arm64")
-        
-        if self.source_arch == self.target_arch:
-            raise ValueError(f"Source and target architectures must be different.")
-    
-    def load_data(self) -> List[DatasetInstance]:
-        """Load the BringUp dataset
-        
+        valid_archs = {'x86', 'arm64', 'riscv'}
+        if self.source_arch not in valid_archs or self.target_arch not in valid_archs:
+            raise ValueError(
+                f"Invalid architecture. Must be one of: {valid_archs}")
+
+        # Load dataset metadata
+        self.metadata = self._load_metadata()
+
+    def _load_metadata(self) -> Dict:
+        """Load dataset metadata from source files and JSONL."""
+        # Convert dataset name to Path and construct paths
+        base_path = Path(self.dataset_name)
+
+        # Load assembly files
+        source_jsonl = Path('data/processed') / self.source_arch.upper() / \
+            f'BringUp_{self.arch_suffix[self.source_arch]}.jsonl'
+        target_jsonl = Path('data/processed') / self.target_arch.upper() / \
+            f'BringUp_{self.arch_suffix[self.target_arch]}.jsonl'
+        print(f"Source JSONL: {source_jsonl}")
+        print(f"Target JSONL: {target_jsonl}")
+        if not source_jsonl.exists() or not target_jsonl.exists():
+            raise ValueError(f"Missing JSONL files for {self.dataset_name}")
+
+        metadata = {
+            'source': self._load_jsonl(source_jsonl),
+            'target': self._load_jsonl(target_jsonl)
+        }
+
+        return metadata
+
+    def _load_jsonl(self, file_path: Path, log_file: bool = False) -> List[Dict]:
+        """Load entries from a JSONL file.
+
+        Args:
+            file_path: Path to the JSONL file
+            log_file: Whether to log the file being loaded
+
         Returns:
-            List[DatasetInstance]: List of dataset instances
+            List of entries from the JSONL file
         """
+        entries = []
+        if log_file:
+            self.logger.info(f"Loading JSONL file: {file_path}")
+        print(f"Loading file: {file_path}")
+        with open(file_path) as f:
+            for line in f:
+                if line.strip():
+                    entry = json.loads(line)
+                    entries.append(entry)
+        print(f"Loaded {len(entries)} entries from {file_path}")
+        return entries
+
+    def load_data(self) -> List[DatasetInstance]:
+        """Load all instances for inference."""
         instances = []
-        
-        # Check if JSONL files exist
-        if not os.path.exists(self.x86_jsonl) or not os.path.exists(self.arm64_jsonl):
-            self.logger.warning(f"JSONL files not found. Running compilation script...")
-            self._compile_dataset()
-        
-        # Load data from JSONL files
-        source_jsonl = self.x86_jsonl 
-        target_jsonl = self.arm64_jsonl 
-        
-        source_data = {}
-        target_data = {}
-        
-        # Load source data
-        with open(source_jsonl, "r") as f:
-            for line in f:
-                if line.strip():
-                    entry = json.loads(line)
-                    source_data[entry["source"]] = entry
-        
-        # Load target data
-        with open(target_jsonl, "r") as f:
-            for line in f:
-                if line.strip():
-                    entry = json.loads(line)
-                    target_data[entry["source"]] = entry
-        
-        # Create dataset instances
-        for problem_id in source_data.keys():
-            if problem_id in target_data:
-                source_entry = source_data[problem_id]
-                target_entry = target_data[problem_id]
-                
-                source_code = source_entry[self.source_arch]
-                target_code = target_entry[self.target_arch]
-                
-                instance = DatasetInstance(
-                    instance_id=problem_id,
-                    source=source_code,
-                    target=target_code,
-                    source_lang=AssemblyLanguage(self.source_arch),
-                    target_lang=AssemblyLanguage(self.target_arch),
-                    metadata={
-                        "problem_id": problem_id,
-                        "source_arch": self.source_arch,
-                        "target_arch": self.target_arch,
-                    }
-                )
-                
-                instances.append(instance)
-        
-        self.logger.info(f"Loaded {len(instances)} BringUp dataset instances")
-        return instances
-    
-    def _compile_dataset(self) -> None:
-        """Compile the BringUp dataset
-        
-        This method runs the compilation script to generate assembly code for
-        both RISC-V and ARM architectures.
-        """
-        script_path = os.path.join(self.dataset_path, "compile_bringup.sh")
-        
-        if not os.path.exists(script_path):
-            self.logger.error(f"Compilation script not found at {script_path}")
-            raise FileNotFoundError(f"Compilation script not found at {script_path}")
-        
-        self.logger.info(f"Running compilation script: {script_path}")
-        
-        try:
-            # Make the script executable
-            os.chmod(script_path, 0o755)
-            
-            # Run the compilation script
-            result = subprocess.run(
-                ["bash", script_path],
-                cwd=os.path.dirname(script_path),
-                capture_output=True,
-                text=True,
-                check=True
+
+        # Create instances from all available data
+        print(f"Source entries: {len(self.metadata['source'])}")
+        print(f"Target entries: {len(self.metadata['target'])}")
+        for idx in range(len(self.metadata['source'])):
+            source_entry = self.metadata['source'][idx]
+            target_entry = self.metadata['target'][idx]
+
+            arch_map = {'x86': 'x86', 'arm64': 'arm', 'riscv': 'risc'}
+            source_key = arch_map[self.source_arch]
+            target_key = arch_map[self.target_arch]
+
+            print(
+                f"Creating instance {idx} with source key {source_key} and target key {target_key}"
             )
-            
-            self.logger.info(f"Compilation script output:\n{result.stdout}")
-            
-            if result.stderr:
-                self.logger.warning(f"Compilation script stderr:\n{result.stderr}")
-                
-        except subprocess.CalledProcessError as e:
-            self.logger.error(f"Compilation script failed with exit code {e.returncode}")
-            self.logger.error(f"Stdout: {e.stdout}")
-            self.logger.error(f"Stderr: {e.stderr}")
-            raise RuntimeError(f"Failed to compile BringUp dataset: {e}")
-    
+            print(f"Source entry keys: {source_entry.keys()}")
+            print(f"Target entry keys: {target_entry.keys()}")
+
+            instance = DatasetInstance(
+                instance_id=f"{self.dataset_name}/{source_entry['source']}",
+                source_lang=AssemblyLanguage(self.source_arch),
+                target_lang=AssemblyLanguage(self.target_arch),
+                source=source_entry[source_key],  # Contains assembly code
+                target=target_entry[target_key],  # Contains assembly code
+                metadata={
+                    'source_file': source_entry['source'],
+                    'source_output': source_entry.get(f'{source_key}_output', ''),
+                    'target_output': target_entry.get(f'{target_key}_output', ''),
+                }
+            )
+            instances.append(instance)
+
+        print(f"Created {len(instances)} instances")
+        self.logger.info(f"Loaded {len(instances)} instances")
+        self._instances = instances
+        return instances
+
     def evaluate(self, predictions: List[str], instances: List[DatasetInstance]) -> Dict[str, Any]:
         """Evaluate the model's predictions
-        
+
         Args:
             predictions: List of predicted target assembly code
             instances: List of dataset instances
-            
+
         Returns:
             Dict[str, Any]: Evaluation metrics
         """
         if len(predictions) != len(instances):
-            raise ValueError(f"Number of predictions ({len(predictions)}) does not match number of instances ({len(instances)})")
-        
+            raise ValueError(
+                f"Number of predictions ({len(predictions)}) does not match number of instances ({len(instances)})")
+
         # Initialize metrics
         total = len(predictions)
         compile_success = 0
         per_problem_results = {}
         errors = {}
-        
+
         # TODO: Implement proper evaluation by compiling the predicted assembly code
         # For now, we'll just count the number of non-empty predictions
         for i, (pred, instance) in enumerate(zip(predictions, instances)):
             problem_id = instance.instance_id
-            
+
             if pred.strip():
                 compile_success += 1
                 per_problem_results[problem_id] = "success"
             else:
                 per_problem_results[problem_id] = "failed"
                 errors[problem_id] = "Empty prediction"
-        
+
         # Calculate overall metrics
         compile_rate = compile_success / total if total > 0 else 0.0
-        
+
         metrics = {
             'compile_rate': compile_rate,
             'per_problem_results': per_problem_results,
             'errors': errors
         }
-        
+
         return metrics
