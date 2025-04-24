@@ -183,12 +183,13 @@ class QwenModel(Model):
 
         outputs = self.model.generate(
             **input_tokens,
-            max_new_tokens=config.max_length,
+            max_new_tokens=max(128, 2048 - input_tokens['input_ids'].shape[1]),
             temperature=config.temperature,
             do_sample=(config.temperature > 0),
             output_attentions=True,
             return_dict_in_generate=True,
             output_scores=True,
+            eos_token_id=self.tokenizer.eos_token_id
         )
         alignments = self.get_alignments(outputs, input_tokens.input_ids.shape[1])
 
@@ -226,13 +227,14 @@ class QwenModel(Model):
                 instance.source_lang.value,
                 instance.target_lang.value
             )
+            print("Prompt:\n",prompt)
             tokenized_input = self.tokenize(prompt)
 
             pred = self.infer(
                 tokenized_input, config
             )
             gc.collect()
-
+        print("Decoded output:\n", self.decode(pred[1]))
         return PredictionResult(
             instance_id=instance.instance_id,
             source=pred[0],
