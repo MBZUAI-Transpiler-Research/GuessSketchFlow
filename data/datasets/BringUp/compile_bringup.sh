@@ -46,6 +46,25 @@ SKIP_TASKS=(
     "satomi" 
     "spirograph" 
     "topo-sort"
+
+    # too large
+    "qsort-demo"
+    "parrondo"
+    "frac-calc"
+    "kepler"
+    "dhrystone"
+    "vectors-3d"
+    "life"
+    "tiny-NN"
+    "fft-int"
+    "distinctness"
+    "primal-test"
+    "regex-parser"
+    "fuzzy-match"
+    "minspan"
+    "quaternions"
+    "banner"
+    "simple-grep"
 )
 
 # Function to check if a task should be skipped
