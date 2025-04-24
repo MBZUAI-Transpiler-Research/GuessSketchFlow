@@ -108,7 +108,7 @@ class Guess:
             dataset=self.dataset,
         )
 
-    def guess(self) -> List[PredictionResult]:
+    def guess(self) -> Dict[str, PredictionResult]:
         """Generate translation candidates for all datapoints using batch processing.
 
         Returns:
