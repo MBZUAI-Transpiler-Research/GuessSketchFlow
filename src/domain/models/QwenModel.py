@@ -239,5 +239,6 @@ class QwenModel(Model):
             instance_id=instance.instance_id,
             source=pred[0],
             pred=pred[1],
-            alignments=pred[2]
+            alignments=pred[2],
+            pred_dec=self.decode(pred[1])
         )

@@ -62,6 +62,7 @@ class InferenceConfig:
     temperature: float = 0.7
     max_length: int = 512
     num_return_sequences: int = 1
+    
 
 
 @dataclass
@@ -72,6 +73,7 @@ class PredictionResult:
     source: [torch.Tensor]  # ids, seq
     pred: [torch.Tensor]  # ids, seq
     alignments: torch.Tensor
+    pred_dec: str
 
 
 class Model(ABC):

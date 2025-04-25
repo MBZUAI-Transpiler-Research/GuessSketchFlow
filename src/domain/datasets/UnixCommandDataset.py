@@ -169,8 +169,17 @@ class UnixCommandDataset(Dataset):
             try:
                 # Write prediction to assembly file
                 asm_file = temp_dir / f"{instance_id}.s"
-                asm_file.write_text(
-                    pred[f"tgt_{self.target_arch}"]["functions"]["main"][f"{self.target_arch}_tokens"])
+                raw_asm = pred.pred_dec
+                match = re.search(r"```(?:armasm)?\s*(.*?)```", raw_asm, re.DOTALL)
+                if match:
+                    stripped_asm = match.group(1).strip()
+                    print(f"[DEBUG] Regex STRIPPED ASM repr:\n{repr(stripped_asm)}")
+                else:
+                    stripped_asm = raw_asm.strip()
+                    print(f"[DEBUG] Fallback STRIPPED ASM repr:\n{repr(stripped_asm)}")
+
+                cleaned_asm = stripped_asm.replace("\r\n", "\n").replace("\r", "\n")
+                asm_file.write_text(cleaned_asm)
 
                 # Try to compile the assembly
                 if self.target_arch == 'arm64':
