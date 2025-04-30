@@ -7,14 +7,15 @@ import pickle
 from src.helpers.model import PredictionResult
 
 
-dataset = load_dataset("ahmedheakl/asm2asm_bench_armv8_O0", split="train")
+#dataset = load_dataset("ahmedheakl/asm2asm_bench_armv8_O0", split="train")
+dataset = load_dataset("ahmedheakl/asm2asm_bringup_O0", split="train")
 model_name = "ahmedheakl/ex19_qwen2.5-1.5b-1M-stack-16kcw"
 print("Loading the model ...")
 model = AutoModelForCausalLM.from_pretrained(
     model_name,
     torch_dtype=torch.bfloat16,
     device_map="auto",
-    attn_implementation="flash_attention_2"
+    attn_implementation="eager"
 )
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 print("Model loaded ...")
@@ -141,10 +142,10 @@ def main():
         except Exception as e:
             print(f"Error in file {example['file']}: {e}")
 
-    with open("eval_armv8_O0_b4.json", "w") as f:
+    with open("bench_armv8_O0_b4_Burj_ex19_qwen2.5.json", "w") as f:
         json.dump(data, f, indent=4)
     
-    with open("eval_armv8_O0_b4.json", "r") as f:
+    with open("bench_armv8_O0_b4_Burj_ex19_qwen2.5.json", "r") as f:
         data = json.load(f)
     
     predictions = {}
@@ -181,29 +182,11 @@ def main():
 
         predictions[instance_id] = result
 
-    # Save to predictions.pkl
+            # Save to predictions.pkl
     with open("predictions.pkl", "wb") as f:
         pickle.dump(predictions, f)
 
     print(f"Saved {len(predictions)} predictions to predictions.pkl.")
-
-    # Load the pickle
-    with open("predictions.pkl", "rb") as f:
-        predictions = pickle.load(f)
-
-    # Now predictions is a dictionary: { instance_id : PredictionResult }
-
-    # Inspect the keys
-    print(list(predictions.keys())[:10])  # Print first 10 instance_ids
-
-    # Pick one entry
-    sample_id = list(predictions.keys())[0]
-    sample_prediction = predictions[sample_id]
-
-    print(f"Instance ID: {sample_prediction.instance_id}")
-    print(f"Decoded Prediction (pred_dec):\n{sample_prediction.pred_dec[:500]}")  # Show first 500 chars
-    print(f"Alignments (if any): {sample_prediction.alignments}")
-
 
 if __name__ == "__main__":
     main()
