@@ -192,8 +192,9 @@ class QwenModel(Model):
             eos_token_id=self.tokenizer.eos_token_id
         )
         alignments = self.get_alignments(outputs, input_tokens.input_ids.shape[1])
+        confidence = self.get_confidence(outputs)
 
-        return (input_tokens.input_ids, outputs.sequences[:, input_tokens.input_ids.shape[1]:], alignments)
+        return (input_tokens.input_ids, outputs.sequences[:, input_tokens.input_ids.shape[1]:], alignments, confidence)
 
     def get_alignments(self, pred_outputs, prompt_len, top_k=10):
         attentions = [
@@ -213,6 +214,18 @@ class QwenModel(Model):
             aligned_tokens.append(top_indices)
 
         return aligned_tokens
+
+    def get_confidence(self, outputs):
+        confidences = []
+        scores = outputs.scores
+        generated_tokens = outputs.sequences[:, -len(scores):]
+
+        for step, (logits, tokens) in enumerate(zip(scores, generated_tokens.T)):
+            probs = F.softmax(logits, dim=-1)
+            batch_conf = probs[range(probs.size(0)), tokens]
+            confidences.extend(batch_conf.tolist())
+        
+        return confidences
 
     def predict(
         self,
@@ -240,5 +253,6 @@ class QwenModel(Model):
             source=pred[0],
             pred=pred[1],
             alignments=pred[2],
+            confidence=pred[3],
             pred_dec=self.decode(pred[1])
         )

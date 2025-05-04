@@ -147,8 +147,9 @@ class BartLargeModel(Model):
             no_repeat_ngram_size=0,
         )
         alignments = self.get_alignments(outputs)
+        confidence = self.get_confidence(outputs)
 
-        return (input_tokens.input_ids, outputs.sequences, alignments)
+        return (input_tokens.input_ids, outputs.sequences, alignments, confidence)
 
     def extract(self, program):
         sections = {}
@@ -194,6 +195,18 @@ class BartLargeModel(Model):
 
         return aligned_tokens
 
+    def get_confidence(self, outputs):
+        confidences = []
+        scores = outputs.scores
+        generated_tokens = outputs.sequences[:, -len(scores):]
+
+        for step, (logits, tokens) in enumerate(zip(scores, generated_tokens.T)):
+            probs = F.softmax(logits, dim=-1)
+            batch_conf = probs[range(probs.size(0)), tokens]
+            confidences.extend(batch_conf.tolist())
+        
+        return confidences
+
     def predict(
         self,
         instance: DatasetInstance,
@@ -224,15 +237,17 @@ class BartLargeModel(Model):
         pred_tokens = torch.as_tensor(
             [[]], dtype=torch.int64
         ).to(self.device)
+        merged_confidence = []
         merged_alignments = []
 
         def merge_sections(section):
-            nonlocal source_tokens, pred_tokens, source_offset, merged_alignments
+            nonlocal source_tokens, pred_tokens, source_offset, merged_alignments, merged_confidence
 
-            (source_ids, pred_ids, alignments) = section
+            (source_ids, pred_ids, alignments, confidence) = section
 
             source_tokens = torch.cat((source_tokens, source_ids), dim=1)
             pred_tokens = torch.cat((pred_tokens, pred_ids), dim=1)
+            merged_confidence.extend(confidence)
 
             merged_alignments.extend(
                 [
@@ -255,5 +270,6 @@ class BartLargeModel(Model):
             instance_id=instance.instance_id,
             source=source_tokens,
             pred=pred_tokens,
-            alignments=merged_alignments
+            alignments=merged_alignments,
+            confidence=merged_confidence,
         )

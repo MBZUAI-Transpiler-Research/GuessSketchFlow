@@ -73,6 +73,7 @@ class PredictionResult:
     source: [torch.Tensor]  # ids, seq
     pred: [torch.Tensor]  # ids, seq
     alignments: torch.Tensor
+    confidence: torch.Tensor
     pred_dec: str
 
 
