@@ -8,6 +8,7 @@ import warnings
 
 import gc
 import torch
+import torch.nn.functional as F
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from src.helpers.dataset import DatasetInstance
@@ -191,14 +192,16 @@ class QwenModel(Model):
             output_scores=True,
             eos_token_id=self.tokenizer.eos_token_id
         )
-        alignments = self.get_alignments(outputs, input_tokens.input_ids.shape[1])
+        alignments = self.get_alignments(
+            outputs, input_tokens.input_ids.shape[1])
         confidence = self.get_confidence(outputs)
 
         return (input_tokens.input_ids, outputs.sequences[:, input_tokens.input_ids.shape[1]:], alignments, confidence)
 
     def get_alignments(self, pred_outputs, prompt_len, top_k=10):
         attentions = [
-            attn[-1].mean(dim=1)[:, 0]  # Mean over heads, then get last token's attention
+            # Mean over heads, then get last token's attention
+            attn[-1].mean(dim=1)[:, 0]
             for attn in pred_outputs.attentions
         ]
 
@@ -224,7 +227,7 @@ class QwenModel(Model):
             probs = F.softmax(logits, dim=-1)
             batch_conf = probs[range(probs.size(0)), tokens]
             confidences.extend(batch_conf.tolist())
-        
+
         return confidences
 
     def predict(
@@ -240,7 +243,7 @@ class QwenModel(Model):
                 instance.source_lang.value,
                 instance.target_lang.value
             )
-            print("Prompt:\n",prompt)
+            print("Prompt:\n", prompt)
             tokenized_input = self.tokenize(prompt)
 
             pred = self.infer(

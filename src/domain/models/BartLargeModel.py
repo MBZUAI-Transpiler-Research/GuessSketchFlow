@@ -4,6 +4,7 @@ import gc
 from typing import Dict, List, Optional, Union
 
 import torch
+import torch.nn.functional as F
 from transformers import AutoModelForSeq2SeqLM, AutoTokenizer, AutoConfig
 
 from src.helpers.dataset import DatasetInstance
@@ -204,7 +205,7 @@ class BartLargeModel(Model):
             probs = F.softmax(logits, dim=-1)
             batch_conf = probs[range(probs.size(0)), tokens]
             confidences.extend(batch_conf.tolist())
-        
+
         return confidences
 
     def predict(
