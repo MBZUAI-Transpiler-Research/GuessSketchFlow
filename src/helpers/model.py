@@ -74,7 +74,6 @@ class PredictionResult:
     pred: [torch.Tensor]  # ids, seq
     alignments: torch.Tensor
     confidence: torch.Tensor
-    pred_dec: str
 
 
 class Model(ABC):

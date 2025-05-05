@@ -4,15 +4,16 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 import torch
 import json
 
-
-dataset = load_dataset("ahmedheakl/asm2asm_bench_armv8_O0", split="train")
+nomen = "bringup_onlyguess.json" #name of json file
+#dataset = load_dataset("ahmedheakl/asm2asm_bench_armv8_O0", split="train")
+dataset = load_dataset("ahmedheakl/asm2asm_bringup_O0", split="train")
 model_name = "ahmedheakl/ex19_qwen2.5-1.5b-1M-stack-16kcw"
 print("Loading the model ...")
 model = AutoModelForCausalLM.from_pretrained(
     model_name,
     torch_dtype=torch.bfloat16,
     device_map="auto",
-    attn_implementation="flash_attention_2"
+    attn_implementation="eager"
 )
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 print("Model loaded ...")
@@ -111,7 +112,7 @@ def main():
         except Exception as e:
             print(f"Error in file {example['file']}: {e}")
 
-    with open("eval_armv8_O0_b4.json", "w") as f:
+    with open(nomen, "w") as f:
         json.dump(data, f, indent=4)
 
 

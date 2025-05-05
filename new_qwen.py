@@ -6,6 +6,7 @@ import json
 import pickle
 from src.helpers.model import PredictionResult
 import gc
+import torch.nn.functional as F
 
 #dataset = load_dataset("ahmedheakl/asm2asm_bench_armv8_O0", split="train")
 dataset = load_dataset("ahmedheakl/asm2asm_bringup_O0", split="train")
@@ -88,10 +89,12 @@ def inference(asm_x86: str) -> tuple:
         output_attentions=True,                
         return_dict_in_generate=True,          
         output_scores=True,
-        do_sample=False,  # Use greedy decoding to save memory
+        do_sample=True,  # Use greedy decoding to save memory
         early_stopping=True
     )
     
+    confidence = get_confidence(generated_outputs)
+
     # Move to CPU immediately to free GPU memory
     generated_ids = [
         output_ids[len(input_ids):].detach().cpu()
@@ -138,7 +141,7 @@ def inference(asm_x86: str) -> tuple:
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
     
-    return pred_dec, alignments
+    return pred_dec, alignments, confidence
 
 # def get_alignments(pred_outputs, prompt_len, top_k=10):
 #     attentions = [
@@ -216,6 +219,18 @@ def get_alignments(pred_outputs, prompt_len, top_k=5, batch_size=1):
     
     return aligned_tokens
 
+def get_confidence(outputs):
+    confidences = []
+    scores = outputs.scores
+    generated_tokens = outputs.sequences[:, -len(scores):]
+
+    for step, (logits, tokens) in enumerate(zip(scores, generated_tokens.T)):
+        probs = F.softmax(logits, dim=-1)
+        batch_conf = probs[range(probs.size(0)), tokens]
+        confidences.extend(batch_conf.tolist())
+    
+    return confidences
+
 def edit_distance_assembly(gt: str, pred: str) -> int:
     def levenshtein(s1, s2):
         if len(s1) < len(s2):
@@ -266,7 +281,8 @@ def main():
         "input": [], 
         "files": [],
         "ed": [],
-        "alignment": []
+        "alignment": [],
+        "confidence": []
     }
     
     # Track successful conversions
@@ -298,7 +314,7 @@ def main():
                 
             # Attempt inference
             try:
-                pred, alignments = inference(input_asm)
+                pred, alignments, confidence = inference(input_asm)
                 success_count += 1
                 
                 # Store results
@@ -307,6 +323,7 @@ def main():
                 data["input"].append(input_asm)
                 data["files"].append(file_name)
                 data["alignment"].append(alignments)
+                data["confidence"].append(confidence)
                 
                 # Calculate edit distance
                 distance = edit_distance_assembly(gt, pred)
@@ -316,7 +333,7 @@ def main():
                 # Save after each successful conversion
                 if success_count % 5 == 0:
                     print(f"Saving intermediate results after {success_count} successful examples")
-                    with open(f"bench_armv8_O0_b4_Burj_ex19_qwen2.5_progress.json", "w") as f:
+                    with open(f"bringup_wAttention_progress.json", "w") as f:
                         json.dump(data, f, indent=4)
                 
             except Exception as e:
@@ -332,7 +349,7 @@ def main():
     # Save final results regardless of success count
     print(f"Successfully processed {success_count} examples out of {len(dataset)}")
     
-    with open("bench_armv8_O0_b4_Burj_ex19_qwen2.5.json", "w") as f:
+    with open("bringup_wAttention.json", "w") as f:
         json.dump(data, f, indent=4)
     
     # Only process predictions if we have any successful conversions
@@ -348,10 +365,10 @@ def main():
                 # Create lightweight PredictionResult
                 result = PredictionResult(
                     instance_id=instance_id,
-                    source=None,  # Skip tokenization 
-                    pred=None,    # Skip tokenization
+                    source=input_x86,  # Skip tokenization 
+                    pred=pred_arm,    # Skip tokenization
                     alignments=data["alignment"][i],
-                    pred_dec=pred_arm
+                    confidence=data["confidence"][i],
                 )
                 predictions[instance_id] = result
             
