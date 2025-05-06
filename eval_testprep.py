@@ -1,7 +1,7 @@
 import json
 import os
 
-with open("humaneval_wAttention.json") as f:
+with open("humaneval_onlyguess.json") as f:
     predictions = json.load(f)
 
 preds = predictions["pred"]
