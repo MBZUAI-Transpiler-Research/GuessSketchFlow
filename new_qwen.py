@@ -8,8 +8,8 @@ from src.helpers.model import PredictionResult
 import gc
 import torch.nn.functional as F
 
-#dataset = load_dataset("ahmedheakl/asm2asm_bench_armv8_O0", split="train")
-dataset = load_dataset("ahmedheakl/asm2asm_bringup_O0", split="train")
+dataset = load_dataset("ahmedheakl/asm2asm_bench_armv8_O0", split="train")
+#dataset = load_dataset("ahmedheakl/asm2asm_bringup_O0", split="train")
 model_name = "ahmedheakl/ex19_qwen2.5-1.5b-1M-stack-16kcw"
 print("Loading the model ...")
 model = AutoModelForCausalLM.from_pretrained(
@@ -333,7 +333,7 @@ def main():
                 # Save after each successful conversion
                 if success_count % 5 == 0:
                     print(f"Saving intermediate results after {success_count} successful examples")
-                    with open(f"bringup_wAttention_progress.json", "w") as f:
+                    with open(f"humaneval_wAttention2_progress.json", "w") as f:
                         json.dump(data, f, indent=4)
                 
             except Exception as e:
@@ -349,7 +349,7 @@ def main():
     # Save final results regardless of success count
     print(f"Successfully processed {success_count} examples out of {len(dataset)}")
     
-    with open("bringup_wAttention.json", "w") as f:
+    with open("humaneval_wAttention2.json", "w") as f:
         json.dump(data, f, indent=4)
     
     # Only process predictions if we have any successful conversions
