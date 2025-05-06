@@ -38,12 +38,12 @@ LBB0_2:                                 ;   in Loop: Header=BB0_1 Depth=1
 	mov	x9, x10
 	add	w9, w9, #1
 	str	w9, [sp, #4]
-	sub	x9, x29, #24
+	add	x9, sp, #24
 	strb	w8, [x9, x10]
 	ldr	w8, [sp, #20]
 	ldr	w9, [sp, #16]
 	sdiv	w8, w8, w9
-	stur	w8, [x29, #-28]
+	str	w8, [sp, #60]
 	b	LBB0_1
 LBB0_3:
 	str	wzr, [sp]
@@ -58,7 +58,8 @@ LBB0_5:                                 ;   in Loop: Header=BB0_4 Depth=1
 	ldr	w8, [sp, #4]
 	subs	w9, w8, #1
 	str	w9, [sp, #4]
-	sub	x8, x29, #24
+	add	x8, sp, #24
+	add	x8, x8, w9, sxtw
 	ldrb	w8, [x8]
 	ldr	x9, [sp, #8]
 	ldrsw	x10, [sp]

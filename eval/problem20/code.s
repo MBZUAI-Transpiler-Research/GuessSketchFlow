@@ -244,7 +244,7 @@ LBB0_32:
 	subs	x8, x8, x9
 	cset	w8, eq
 	tbnz	w8, #0, LBB0_34
-	b	LBB0_333
+	b	LBB0_33
 LBB0_33:
 	bl	___stack_chk_fail
 LBB0_34:

@@ -132,7 +132,7 @@ LBB0_12:
                                         ; -- End function
 	.section	__TEXT,__cstring,cstring_literals
 l_.str:                                 ; @.str
-	.asciz	"the the number of odd elements %d in the string %d of the %d input."
+	.asciz	"the"
 
 .subsections_via_symbols
 

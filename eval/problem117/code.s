@@ -127,7 +127,7 @@ LBB0_13:                                ;   in Loop: Header=BB0_3 Depth=2
 	ldrsw	x10, [sp, #16]
 	str	w8, [x9, x10, lsl #2]
 	ldr	w8, [sp, #20]
-	ldr	x9, [sp, #440]
+	ldr	x9, [sp, #40]
 	ldrsw	x10, [sp, #12]
 	str	w8, [x9, x10, lsl #2]
 	b	LBB0_14

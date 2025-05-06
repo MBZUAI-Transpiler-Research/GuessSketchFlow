@@ -72,7 +72,7 @@ LBB0_6:
 	ldr	w0, [sp, #12]                   ; 4-byte Folded Reload
 	add	sp, sp, #4032
 	ldp	x29, x30, [sp, #16]             ; 16-byte Folded Reload
-	ldp	x28, x27, [sp], #32             ; 16-byte Folded Reload
+	ldp	x28, x27, [sp], #32           ; 16-byte Folded Reload
 	ret
 	.cfi_endproc
                                         ; -- End function

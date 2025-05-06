@@ -14,7 +14,8 @@ _func0:                                 ; @func0
 	frinta	s0, s0
 	ldr	s1, [sp, #8]
 	fcmp	s0, s1
-	b.eq	LBB0_2
+	cset	w8, eq
+	tbnz	w8, #0, LBB0_2
 	b	LBB0_1
 LBB0_1:
 	str	wzr, [sp, #12]
@@ -24,7 +25,8 @@ LBB0_2:
 	frinta	s0, s0
 	ldr	s1, [sp, #4]
 	fcmp	s0, s1
-	b.eq	LBB0_4
+	cset	w8, eq
+	tbnz	w8, #0, LBB0_4
 	b	LBB0_3
 LBB0_3:
 	str	wzr, [sp, #12]
@@ -34,7 +36,8 @@ LBB0_4:
 	frinta	s0, s0
 	ldr	s1, [sp]
 	fcmp	s0, s1
-	b.eq	LBB0_6
+	cset	w8, eq
+	tbnz	w8, #0, LBB0_6
 	b	LBB0_5
 LBB0_5:
 	str	wzr, [sp, #12]
@@ -45,7 +48,8 @@ LBB0_6:
 	fadd	s0, s0, s1
 	ldr	s1, [sp]
 	fcmp	s0, s1
-	b.eq	LBB0_9
+	cset	w8, eq
+	tbnz	w8, #0, LBB0_9
 	b	LBB0_7
 LBB0_7:
 	ldr	s0, [sp, #8]
@@ -53,7 +57,8 @@ LBB0_7:
 	fadd	s0, s0, s1
 	ldr	s1, [sp, #4]
 	fcmp	s0, s1
-	b.eq	LBB0_9
+	cset	w8, eq
+	tbnz	w8, #0, LBB0_9
 	b	LBB0_8
 LBB0_8:
 	ldr	s0, [sp, #4]
@@ -61,14 +66,15 @@ LBB0_8:
 	fadd	s0, s0, s1
 	ldr	s1, [sp, #8]
 	fcmp	s0, s1
-	b.ne	LBB0_10
+	cset	w8, ne
+	tbnz	w8, #0, LBB0_10
 	b	LBB0_9
 LBB0_9:
 	mov	w8, #1
 	str	w8, [sp, #12]
 	b	LBB0_11
 LBB0_10:
-	str	wzr, [sp, #11]
+	str	wzr, [sp, #12]
 	b	LBB0_11
 LBB0_11:
 	ldr	w0, [sp, #11]

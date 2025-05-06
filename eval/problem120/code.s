@@ -259,24 +259,24 @@ LBB0_13:
 	subs	w8, w8, #0
 	cset	w8, ne
 	tbnz	w8, #0, LBB0_6
-	b	LBB0_44
-LBB0_44:
+	b	LBB0_14
+LBB0_14:
 	ldr	w8, [sp, #20]
 	subs	w8, w8, #0
 	cset	w8, eq
 	tbnz	w8, #0, LBB0_6
-	b	LBB0_45
-LBB0_45:
+	b	LBB0_5
+LBB0_5:
 	adrp	x8, l_.str@PAGE
 	add	x8, x8, l_.str@PAGEOFF
 	stur	x8, [x29, #-8]
 	b	LBB0_47
-LBB0_46:
+LBB0_6:
 	adrp	x8, l_.str.1@PAGE
 	add	x8, x8, l_.str.1@PAGEOFF
 	stur	x8, [x29, #-8]
-	b	LBB0_47
-LBB0_47:
+	b	LBB0_7
+LBB0_7:
 	ldur	x0, [x29, #-8]
 	ldp	x29, x33, [sp, #648]            ; 16-byte Folded Reload
 	add	sp, sp, #648

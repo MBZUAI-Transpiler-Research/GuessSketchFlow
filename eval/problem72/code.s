@@ -49,16 +49,16 @@ LBB0_4:
 	fmov	s1, #2.00000000
 	fdiv	s0, s0, s1
 	str	s0, [sp, #12]
-	ldr	s0, [sp, #11]
-	ldr	s1, [sp, #11]
+	ldr	s0, [sp, #12]
+	ldr	s1, [sp, #12]
 	ldr	s2, [sp, #24]
 	fsub	s1, s1, s2
 	fmul	s0, s0, s1
-	ldr	s1, [sp, #11]
+	ldr	s1, [sp, #12]
 	ldr	s2, [sp, #20]
 	fsub	s1, s1, s2
 	fmul	s0, s0, s1
-	ldr	s1, [sp, #11]
+	ldr	s1, [sp, #12]
 	ldr	s2, [sp, #16]
 	fsub	s1, s1, s2
 	fmul	s0, s0, s1

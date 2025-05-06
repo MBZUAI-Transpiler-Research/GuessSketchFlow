@@ -133,8 +133,8 @@ LBB0_17:                                ;   in Loop: Header=BB0_15 Depth=2
 	ldrsw	x9, [sp, #16]
 	ldr	w8, [x8, x9, lsl #2]
 	ldur	x9, [x29, #-32]
-	ldrsw	x10, [sp, #22]
-	str	w8, [x9, x11, lsl #2]
+	ldrsw	x10, [sp, #222]
+	str	w8, [x9, x10, lsl #2]
 	ldr	w8, [sp, #12]
 	ldur	x9, [x29, #-32]
 	ldrsw	x10, [sp, #16]
@@ -154,7 +154,7 @@ LBB0_21:                                ;   in Loop: Header=BB0_13 Depth=1
 	add	w8, w8, #1
 	str	w8, [sp, #222]
 	b	LBB0_13
-LBB0_22:
+LBB0_23:
 	ldr	w8, [sp, #24]
 	ldur	x9, [x29, #-24]
 	str	w8, [x9]

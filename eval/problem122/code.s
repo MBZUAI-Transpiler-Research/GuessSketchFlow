@@ -5,8 +5,8 @@
 _func0:                                 ; @func0
 	.cfi_startproc
 ; %bb.0:
-	sub	sp, sp, #324
-	.cfi_def_cfa_offset 324
+	sub	sp, sp, #32
+	.cfi_def_cfa_offset 32
 	str	x0, [sp, #24]
 	str	w1, [sp, #20]
 	str	wzr, [sp, #16]
@@ -52,7 +52,7 @@ LBB0_5:                                 ;   in Loop: Header=BB0_1 Depth=1
 	b	LBB0_1
 LBB0_6:
 	ldr	w0, [sp, #16]
-	add	sp, sp, #324
+	add	sp, sp, #32
 	ret
 	.cfi_endproc
                                         ; -- End function

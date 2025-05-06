@@ -158,7 +158,7 @@ LBB0_12:
 	mov	w8, #1
 	str	w8, [sp, #324]
 	b	LBB0_13
-LBB0_13:                                 ; =>This Loop Header: Depth=1
+LBB0_13:                                ; =>This Loop Header: Depth=1
                                         ;     Child Loop BB0_15 Depth 2
                                         ;       Child Loop BB0_17 Depth 3
                                         ;       Child Loop BB0_22 Depth 3
@@ -169,7 +169,7 @@ LBB0_13:                                 ; =>This Loop Header: Depth=1
 	cset	w8, ge
 	tbnz	w8, #0, LBB0_38
 	b	LBB0_14
-LBB0_14:                                 ;   in Loop: Header=BB0_13 Depth=1
+LBB0_14:                                ;   in Loop: Header=BB0_13 Depth=1
 	mov	w8, #1
 	str	w8, [sp, #28]
 	b	LBB0_15

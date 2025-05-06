@@ -109,9 +109,9 @@ LBB0_13:                                ;   in Loop: Header=BB0_1 Depth=1
 LBB0_14:                                ;   in Loop: Header=BB0_1 Depth=1
 	b	LBB0_15
 LBB0_15:                                ;   in Loop: Header=BB0_1 Depth=1
-	ldr	w8, [sp, #48]
+	ldr	w8, [sp, #44]
 	add	w8, w8, #1
-	str	w8, [sp, #48]
+	str	w8, [sp, #44]
 	b	LBB0_1
 LBB0_16:
 	ldur	x0, [x29, #-32]

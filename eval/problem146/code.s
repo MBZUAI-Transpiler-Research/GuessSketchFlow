@@ -126,7 +126,7 @@ LBB0_13:                                ;   in Loop: Header=BB0_11 Depth=1
 	mov	w8, #1
 	str	w8, [sp, #36]
 	b	LBB0_14
-LBB0_14:                                ;   Parent Loop BB0_11 Depth=1
+LBB0_14:                                ;   Parent Loop BB0_12 Depth=1
                                         ; =>  This Inner Loop Header: Depth=2
 	ldr	w8, [sp, #36]
 	ldur	w9, [x29, #-36]
