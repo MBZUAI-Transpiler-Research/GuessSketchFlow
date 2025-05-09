@@ -8,8 +8,8 @@ from src.helpers.model import PredictionResult
 import gc
 import torch.nn.functional as F
 
-dataset = load_dataset("ahmedheakl/asm2asm_bench_armv8_O0", split="train")
-#dataset = load_dataset("ahmedheakl/asm2asm_bringup_O0", split="train")
+#dataset = load_dataset("ahmedheakl/asm2asm_bench_armv8_O0", split="train")
+dataset = load_dataset("ahmedheakl/asm2asm_bringup_O0", split="train")
 model_name = "ahmedheakl/ex19_qwen2.5-1.5b-1M-stack-16kcw"
 print("Loading the model ...")
 model = AutoModelForCausalLM.from_pretrained(
@@ -107,7 +107,9 @@ def inference(asm_x86: str) -> tuple:
     
     # Decode the output
     response = tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0]
-    
+    response_token_ids = generated_ids[0].tolist()
+    input_token_ids = model_inputs['input_ids'][0].tolist()
+
     # Extract ARM code
     try:
         pred_dec = (
@@ -141,7 +143,7 @@ def inference(asm_x86: str) -> tuple:
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
     
-    return pred_dec, alignments, confidence
+    return pred_dec, response_token_ids, input_token_ids, alignments, confidence
 
 # def get_alignments(pred_outputs, prompt_len, top_k=10):
 #     attentions = [
@@ -314,13 +316,13 @@ def main():
                 
             # Attempt inference
             try:
-                pred, alignments, confidence = inference(input_asm)
+                pred, response_token_ids, input_token_ids, alignments, confidence = inference(input_asm)
                 success_count += 1
                 
                 # Store results
-                data["pred"].append(pred)
+                data["pred"].append(response_token_ids)
                 data["gt"].append(gt)
-                data["input"].append(input_asm)
+                data["input"].append(input_token_ids)
                 data["files"].append(file_name)
                 data["alignment"].append(alignments)
                 data["confidence"].append(confidence)
@@ -333,7 +335,7 @@ def main():
                 # Save after each successful conversion
                 if success_count % 5 == 0:
                     print(f"Saving intermediate results after {success_count} successful examples")
-                    with open(f"humaneval_wAttention2_progress.json", "w") as f:
+                    with open(f"bringup_wAttention_progress.json", "w") as f:
                         json.dump(data, f, indent=4)
                 
             except Exception as e:
@@ -349,7 +351,7 @@ def main():
     # Save final results regardless of success count
     print(f"Successfully processed {success_count} examples out of {len(dataset)}")
     
-    with open("humaneval_wAttention2.json", "w") as f:
+    with open("bringup_wAttention_Tokenized.json", "w") as f:
         json.dump(data, f, indent=4)
     
     # Only process predictions if we have any successful conversions
@@ -377,11 +379,13 @@ def main():
                 pickle.dump(predictions, f)
             
             print(f"Saved {len(predictions)} predictions to predictions.pkl.")
-            
+            return predictions
+
         except Exception as e:
             print(f"Error saving predictions: {e}")
     else:
         print("No successful conversions to save.")
+        return {}
 
 if __name__ == "__main__":
     main()

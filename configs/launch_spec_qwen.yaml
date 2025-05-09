@@ -5,7 +5,7 @@ run:
   
 # Model Configuration
 model:
-  name: "qwen:ahmedheakl/asm2asm_1.5B_armv8_O0"
+  name: "qwen:ahmedheakl/ex19_qwen2.5-1.5b-1M-stack-16kcw"
   is_enc_dec: false
   checkpoint: "..." 
   max_length: 4096
