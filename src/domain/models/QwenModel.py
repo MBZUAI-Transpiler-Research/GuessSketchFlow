@@ -1,9 +1,6 @@
-"""Implementation of Qwen-based assembly transpiler model."""
-
 import logging
 import time
-from functools import wraps
-from typing import Dict, List, Optional, Union, Callable, TypeVar
+from typing import Dict, List, Optional, Union
 import warnings
 
 import gc
@@ -15,27 +12,6 @@ from src.helpers.dataset import DatasetInstance
 from src.helpers.model import Model, InferenceConfig, PredictionResult
 
 logger = logging.getLogger(__name__)
-
-T = TypeVar('T')
-
-
-def measure_time(description: str) -> Callable:
-    """Decorator to measure execution time of methods.
-
-    Args:
-        description: Description of the operation being timed
-    """
-    def decorator(func: Callable[..., T]) -> Callable[..., T]:
-        @wraps(func)
-        def wrapper(*args, **kwargs) -> T:
-            start_time = time.time()
-            result = func(*args, **kwargs)
-            elapsed_time = time.time() - start_time
-            logger.info(
-                f"{description} completed in {elapsed_time:.2f} seconds")
-            return result
-        return wrapper
-    return decorator
 
 
 class QwenModel(Model):
@@ -84,7 +60,6 @@ class QwenModel(Model):
             f"Model initialization completed in {elapsed_time:.2f} seconds"
         )
 
-    @measure_time("Prompt preparation")
     def prepare_prompt(self, source_code: str, source_lang: str, target_lang: str) -> str:
         """Prepare system/user prompt for chat-based inference.
 
@@ -116,7 +91,6 @@ class QwenModel(Model):
         )
         return chat_text
 
-    @measure_time("Tokenization")
     def tokenize(self, text: Union[str, List[str]], **kwargs) -> Dict[str, torch.Tensor]:
         """Tokenize input text and move tensors to model device.
 
@@ -137,7 +111,6 @@ class QwenModel(Model):
         logger.debug(f"Tokenized shape: {tokens['input_ids'].shape}")
         return tokens
 
-    @measure_time("Token decoding")
     def decode(self, token_ids: torch.Tensor, **kwargs) -> Union[str, List[str]]:
         """Decode generated tokens back to text.
 
@@ -156,23 +129,12 @@ class QwenModel(Model):
             return decoded[0]
         return decoded
 
-    # @measure_time("Model inference")
     def infer(
         self,
         input_tokens: Dict[str, torch.Tensor],
         config: Optional[InferenceConfig] = None,
         **kwargs
     ):
-        """Perform inference on prepared input tokens.
-
-        Args:
-            input_tokens: Dict with input_ids and attention_mask
-            config: Optional inference configuration
-            **kwargs: Additional model-specific arguments
-
-        Returns:
-            InferenceResult with generated tokens and metadata
-        """
         if config is None:
             config = InferenceConfig()
 
@@ -344,7 +306,6 @@ class QwenModel(Model):
                 instance.source_lang.value,
                 instance.target_lang.value
             )
-            print("Prompt:\n", prompt)
             tokenized_input = self.tokenize(prompt)
 
             pred = self.infer(
@@ -353,10 +314,12 @@ class QwenModel(Model):
             gc.collect()
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
+
         decoded = self.decode(pred[1])
         print("Decoded output:\n", decoded)
         distance = self.edit_distance_assembly(instance.target, decoded)
         print(f"Levenshtein distance: {distance}")
+
         return PredictionResult(
             instance_id=instance.instance_id,
             source=pred[0],
