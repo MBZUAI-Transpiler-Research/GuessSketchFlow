@@ -57,12 +57,14 @@ class QwenModel(Model):
             model_name: Huggingface model ID or local checkpoint path.
             device: device_map argument for loading models (usually "auto").
         """
+        #evice = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
         logger.info(
             f"Initializing QwenModel with {model_name} on device {device}"
         )
 
         start_time = time.time()
-        # Load model
+
         self.model = AutoModelForCausalLM.from_pretrained(
             model_name,
             torch_dtype=torch.bfloat16,
@@ -182,11 +184,27 @@ class QwenModel(Model):
             f"Input shape: {input_tokens['input_ids'].shape}"
         )
 
+        # Dynamically calculate max_new_tokens
+        context_size = 15500
+        input_token_count = input_tokens["input_ids"].shape[1]
+        max_new_tokens = max(context_size - input_token_count, 1000)  # Ensure minimum
+
+        # Fallback if input is still too large
+        if input_token_count > context_size - 1000:
+            logger.warning(f"Input exceeds safe context limit ({input_token_count} tokens). Truncating...")
+            input_tokens["input_ids"] = input_tokens["input_ids"][:, :(context_size - 2000)]
+            input_tokens["attention_mask"] = input_tokens["attention_mask"][:, :(context_size - 2000)]
+            input_token_count = input_tokens["input_ids"].shape[1]
+            max_new_tokens = max(context_size - input_token_count, 1000)
+
         outputs = self.model.generate(
             **input_tokens,
-            max_new_tokens=max(128, 2048 - input_tokens['input_ids'].shape[1]),
+            max_new_tokens=max_new_tokens,
             temperature=config.temperature,
-            do_sample=(config.temperature > 0),
+            num_beams=2,
+            num_return_sequences=1,
+            do_sample=True,
+            early_stopping=True,
             output_attentions=True,
             return_dict_in_generate=True,
             output_scores=True,
@@ -196,27 +214,84 @@ class QwenModel(Model):
             outputs, input_tokens.input_ids.shape[1])
         confidence = self.get_confidence(outputs)
 
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
         return (input_tokens.input_ids, outputs.sequences[:, input_tokens.input_ids.shape[1]:], alignments, confidence)
 
-    def get_alignments(self, pred_outputs, prompt_len, top_k=10):
-        attentions = [
-            # Mean over heads, then get last token's attention
-            attn[-1].mean(dim=1)[:, 0]
-            for attn in pred_outputs.attentions
-        ]
+    # def get_alignments(self, pred_outputs, prompt_len, top_k=10):
+    #     attentions = [
+    #         # Mean over heads, then get last token's attention
+    #         attn[-1].mean(dim=1)[:, 0]
+    #         for attn in pred_outputs.attentions
+    #     ]
 
+    #     out_seq_len = pred_outputs.sequences.shape[-1] - prompt_len
+    #     aligned_tokens = []
+
+    #     for out_idx in range(out_seq_len):
+    #         if out_idx >= len(attentions):
+    #             break
+
+    #         alignment = attentions[out_idx][0]
+    #         top_indices = alignment.topk(top_k).indices.tolist()
+    #         aligned_tokens.append(top_indices)
+
+    #     return aligned_tokens
+
+    def get_alignments(self, pred_outputs, prompt_len, top_k=5, batch_size=1):
+        """
+        Memory-efficient alignment extraction that handles large attention maps.
+
+        Args:
+            pred_outputs: Generation outputs with attention maps
+            prompt_len: Length of the input prompt
+            top_k: Number of top attention indices to keep
+            batch_size: Number of attention maps to process at once
+
+        Returns:
+            List of top-k attended token indices for each output token
+        """
         out_seq_len = pred_outputs.sequences.shape[-1] - prompt_len
         aligned_tokens = []
 
-        for out_idx in range(out_seq_len):
-            if out_idx >= len(attentions):
-                break
+        max_attn_to_process = len(pred_outputs.attentions)
+        process_indices = list(range(0, max_attn_to_process))
 
-            alignment = attentions[out_idx][0]
-            top_indices = alignment.topk(top_k).indices.tolist()
-            aligned_tokens.append(top_indices)
+        for idx in process_indices:
+            if idx >= len(pred_outputs.attentions):
+                continue
+
+            try:
+                # Get only the last layer
+                attn = pred_outputs.attentions[idx][-1]
+
+                # Move to CPU immediately and keep only what we need
+                last_layer_attn = attn.mean(dim=1)[:, 0].detach().cpu()
+                del attn
+
+                if last_layer_attn.shape[1] > prompt_len:
+                    relevant_attn = last_layer_attn[:, :prompt_len]
+                else:
+                    relevant_attn = last_layer_attn
+
+                top_k_actual = min(top_k, relevant_attn.shape[1])
+                top_indices = relevant_attn[0].topk(top_k_actual).indices.tolist()
+                aligned_tokens.append(top_indices)
+
+                del last_layer_attn
+                del relevant_attn
+
+            except Exception as e:
+                print(f"Warning: Error processing attention at index {idx}: {e}")
+                aligned_tokens.append([0] * top_k)
+
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
 
         return aligned_tokens
+
 
     def get_confidence(self, outputs):
         confidences = []
@@ -229,6 +304,32 @@ class QwenModel(Model):
             confidences.extend(batch_conf.tolist())
 
         return confidences
+    
+    def edit_distance_assembly(self, gt: str, pred: str) -> int:
+        def levenshtein(s1, s2):
+            if len(s1) < len(s2):
+                return levenshtein(s2, s1)
+            if len(s2) == 0:
+                return len(s1)
+            previous_row = range(len(s2) + 1)
+            for i, c1 in enumerate(s1):
+                current_row = [i + 1]
+                for j, c2 in enumerate(s2):
+                    insertions = previous_row[j + 1] + 1
+                    deletions = current_row[j] + 1
+                    substitutions = previous_row[j] + (c1 != c2)
+                    current_row.append(min(insertions, deletions, substitutions))
+                previous_row = current_row
+            return previous_row[-1]
+
+        def preprocess(code):
+            code = "\n".join(line.split(";")[0].strip() for line in code.split("\n"))
+            code = "\n".join(line for line in code.split("\n") if line.strip())
+            return code
+
+        gt_processed = preprocess(gt)
+        pred_processed = preprocess(pred)
+        return levenshtein(gt_processed, pred_processed)
 
     def predict(
         self,
@@ -250,12 +351,18 @@ class QwenModel(Model):
                 tokenized_input, config
             )
             gc.collect()
-        print("Decoded output:\n", self.decode(pred[1]))
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+        decoded = self.decode(pred[1])
+        print("Decoded output:\n", decoded)
+        distance = self.edit_distance_assembly(instance.target, decoded)
+        print(f"Levenshtein distance: {distance}")
         return PredictionResult(
             instance_id=instance.instance_id,
             source=pred[0],
             pred=pred[1],
             alignments=pred[2],
             confidence=pred[3],
-            pred_dec=self.decode(pred[1])
+            pred_dec=decoded,
+            levenshtein_distance=distance
         )

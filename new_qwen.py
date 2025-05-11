@@ -179,8 +179,10 @@ def get_alignments(pred_outputs, prompt_len, top_k=5, batch_size=1):
     aligned_tokens = []
     
     # Handle case where sequence is too long - take subset of attention maps
-    max_attn_to_process = min(100, len(pred_outputs.attentions))
-    process_indices = list(range(0, max_attn_to_process, max(1, max_attn_to_process // 100)))
+    #max_attn_to_process = min(100, len(pred_outputs.attentions))
+    #process_indices = list(range(0, max_attn_to_process, max(1, max_attn_to_process // 100)))
+    max_attn_to_process = len(pred_outputs.attentions)
+    process_indices = list(range(0, max_attn_to_process))
     
     for idx in process_indices:
         if idx >= len(pred_outputs.attentions):

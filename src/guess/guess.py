@@ -118,8 +118,12 @@ class Guess:
 
         # Process all batches
         for instance in self.data_loader.iter():
-            prediction = self.model.predict(instance, self.inference_cfg)
-            all_predictions[instance.instance_id] = prediction
+            try:
+                prediction = self.model.predict(instance, self.inference_cfg)
+                all_predictions[instance.instance_id] = prediction
+            except Exception as e:
+                print(f"Error processing {instance.instance_id}: {e}")
+                continue
 
         return all_predictions
 

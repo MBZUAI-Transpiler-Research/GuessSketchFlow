@@ -74,6 +74,8 @@ class PredictionResult:
     pred: [torch.Tensor]  # ids, seq
     alignments: torch.Tensor
     confidence: torch.Tensor
+    pred_dec: Optional[str] = None
+    levenshtein_distance: Optional[int] = None
 
 
 class Model(ABC):
