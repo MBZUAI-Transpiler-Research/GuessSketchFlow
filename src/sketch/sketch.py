@@ -222,7 +222,7 @@ class Sketch:
 
         return blocks
 
-    def sketch(self, predictions: Dict[str, PredictionResult]) -> Dict[str, Tuple[PredictionResult, SketchResult]]:
+    def sketch(self, predictions: Dict[str, PredictionResult]) -> Dict[str, Tuple[PredictionResult, SketchResult, Dict[str, int]]]:
         sketch_results = {}
         for instance_id, pred in predictions.items():
             if pred is None:
@@ -240,13 +240,20 @@ class Sketch:
                     pred_dec=pred.pred_dec,
                     levenshtein_distance=pred.levenshtein_distance
                 )
-                fixed_pred = fix_duplicate_sections(self, fixed_pred)
-                fixed_pred = fix_missing_sections(self, fixed_pred)
+                fixed_pred, duplicates = fix_duplicate_sections(self, fixed_pred)
+                fixed_pred, missing = fix_missing_sections(self, fixed_pred)
 
-                sketch_results[instance_id] = (fixed_pred, self._sketch_single(fixed_pred))
+                fixed_pred.pred_dec = self.model.decode(fixed_pred.pred[0])
+
+                stats = {
+                    "duplicates": duplicates,
+                    "missing": missing
+                }
+
+                sketch_results[instance_id] = (fixed_pred, self._sketch_single(fixed_pred), stats)
             except Exception as e:
                 logger.error(f"Failed to process instance {instance_id}: {str(e)}")
-                sketch_results[instance_id] = (pred, None)
+                sketch_results[instance_id] = (pred, None, None)
 
         return sketch_results
 

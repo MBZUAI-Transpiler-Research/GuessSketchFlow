@@ -41,7 +41,7 @@ def remove_sections(sections: List[Section], prediction: PredictionResult) -> Pr
     )
 
 
-def fix_duplicate_sections(sketch: Sketch, prediction: PredictionResult) -> PredictionResult:
+def fix_duplicate_sections(sketch: Sketch, prediction: PredictionResult) -> [PredictionResult, int]:
     cleaned_pred = prediction
 
     sections = sketch.extract_sections(prediction.pred)
@@ -51,21 +51,25 @@ def fix_duplicate_sections(sketch: Sketch, prediction: PredictionResult) -> Pred
             sections_by_name[section.name].append(section)
         else:
             sections_by_name[section.name] = [section]
+
+    duplicates = 0
     
     for section_name, sections in sections_by_name.items():
         if len(sections) > 1:
+            duplicates += len(sections) - 1
             sections.sort(key=lambda section: section_confidence(section, prediction), reverse=True)
 
             cleaned_pred = remove_sections(sections[1:], cleaned_pred)
 
-    return cleaned_pred
+    return cleaned_pred, duplicates
 
 
 def fix_missing_sections(
     sketch: Sketch, 
     prediction: PredictionResult,
-) -> PredictionResult:
+) -> [PredictionResult, int]:
     fixed_pred = prediction
+    missing = 0
 
     source_lang = sketch.config.source_lang
     target_lang = sketch.config.target_lang
@@ -146,5 +150,7 @@ def fix_missing_sections(
                 start=-1,
                 end=-1,
             )
+
+            missing += 1
             
-    return fixed_pred
+    return fixed_pred, missing
