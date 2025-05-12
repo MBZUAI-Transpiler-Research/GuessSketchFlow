@@ -12,7 +12,7 @@ from src.sketch.instruction_mapping import get_mappings_for_lang, InstructionTyp
 
 
 def section_confidence(section: Section, prediction: PredictionResult) -> float:
-    return prediction.confidence[section.start:section.end].mean()
+    return np.mean(prediction.confidence[section.start:section.end])
 
 
 def remove_sections(sections: List[Section], prediction: PredictionResult) -> PredictionResult:
@@ -28,8 +28,9 @@ def remove_sections(sections: List[Section], prediction: PredictionResult) -> Pr
         mask[section.start:section.end] = False
     
     filtered_pred = pred[mask]
-    filtered_confidence = confidence[mask]
-    filtered_alignments = alignments[mask] if alignments is not None else None
+
+    filtered_confidence = np.array(confidence)[mask].tolist()
+    filtered_alignments = np.array(alignments)[mask].tolist()
     
     return PredictionResult(
         instance_id=prediction.instance_id,
@@ -103,8 +104,9 @@ def fix_missing_sections(
                 prediction.source[0][source_section.start:source_section.end]
             )
             source_section_instance = DatasetInstance(
-                instance_id=source_section.instance_id,
+                instance_id=prediction.instance_id,
                 source=source_section_assembly,
+                target=source_section_assembly,
                 source_lang=AssemblyLanguage.from_str(source_lang),
                 target_lang=AssemblyLanguage.from_str(target_lang),
             )
@@ -113,18 +115,19 @@ def fix_missing_sections(
                 instance=source_section_instance,
                 config=InferenceConfig(),
             )
-            fixed_pred.pred[0] = torch.cat([
+
+            source_offset = fixed_pred.source.shape[1]
+
+            new_pred = torch.cat([
                 fixed_pred.pred[0],
-                new_section.pred[0],
-            ])
-            fixed_pred.source = torch.cat([
-                fixed_pred.source,
-                new_section.source,
-            ])
-            fixed_pred.confidence = torch.cat([
-                fixed_pred.confidence,
-                new_section.confidence,
-            ])
+                new_section.pred[0].to(fixed_pred.pred[0].device),
+            ]).unsqueeze(0)
+            new_source = torch.cat([
+                fixed_pred.source[0],
+                new_section.source[0].to(fixed_pred.source[0].device),
+            ]).unsqueeze(0)
+            fixed_pred.pred = new_pred
+            fixed_pred.source = new_source
 
             shifted_alignments = torch.tensor(
                 [
@@ -132,10 +135,10 @@ def fix_missing_sections(
                     for src_idxes in new_section.alignments
                 ]
             )
-            fixed_pred.alignments = torch.cat([
-                fixed_pred.alignments,
-                shifted_alignments,
-            ])
+            fixed_pred.alignments.extend(shifted_alignments)
+            fixed_pred.confidence.extend(
+                new_section.confidence
+            )
 
             # Do not generate same section twice
             pred_sections_by_name[dest_section] = Section(
