@@ -20,8 +20,8 @@ if __name__ == "__main__":
     with open("predictions.pkl", "wb") as f:
         pickle.dump(predictions, f)
 
-    metrics = guess.evaluate(predictions)
-    print("Evaluation complete.")
-    print(metrics)
     sketch = Sketch(config=config, model=guess.model)
-    sketch.sketch(predictions)
+    sketch_results = sketch.sketch(predictions)
+
+    with open("sketch_results.pkl", "wb") as f:
+        pickle.dump(sketch_results, f)

@@ -122,6 +122,7 @@ class Guess:
                 prediction = self.model.predict(instance, self.inference_cfg)
                 all_predictions[instance.instance_id] = prediction
             except Exception as e:
+                all_predictions[instance.instance_id] = None
                 print(f"Error processing {instance.instance_id}: {e}")
                 continue
 
