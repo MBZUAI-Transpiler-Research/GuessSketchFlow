@@ -33,7 +33,8 @@ class QwenModel(Model):
             model_name: Huggingface model ID or local checkpoint path.
             device: device_map argument for loading models (usually "auto").
         """
-        #evice = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        if device is None:
+            device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
         logger.info(
             f"Initializing QwenModel with {model_name} on device {device}"
@@ -44,8 +45,7 @@ class QwenModel(Model):
         self.model = AutoModelForCausalLM.from_pretrained(
             model_name,
             torch_dtype=torch.bfloat16,
-            device_map="auto",
-        ).to(torch.device(device))
+        ).to(device)
 
         # Load tokenizer
         tokenizer = AutoTokenizer.from_pretrained(model_name)
@@ -163,8 +163,8 @@ class QwenModel(Model):
             **input_tokens,
             max_new_tokens=max_new_tokens,
             temperature=config.temperature,
-            num_beams=2,
-            num_return_sequences=1,
+            num_beams=config.beam_size,
+            num_return_sequences=config.num_return_sequences,
             do_sample=True,
             early_stopping=True,
             output_attentions=True,
@@ -218,10 +218,7 @@ class QwenModel(Model):
         out_seq_len = pred_outputs.sequences.shape[-1] - prompt_len
         aligned_tokens = []
 
-        max_attn_to_process = len(pred_outputs.attentions)
-        process_indices = list(range(0, max_attn_to_process))
-
-        for idx in process_indices:
+        for idx in range(len(pred_outputs.attentions)):
             if idx >= len(pred_outputs.attentions):
                 continue
 

@@ -58,9 +58,9 @@ class InferenceConfig:
         max_length: Maximum length of generated sequence
         num_return_sequences: Number of sequences to return per input
     """
-    beam_size: int = 5
+    beam_size: int = 2
     temperature: float = 0.7
-    max_length: int = 512
+    max_length: int = 15500
     num_return_sequences: int = 1
     
 

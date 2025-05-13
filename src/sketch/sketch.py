@@ -10,6 +10,8 @@ from src.sketch.uni_parser.ast import Label
 from src.sketch.z3_helpers import blocks_equivalent_z3, extract_block_info, is_valid_block_pair
 from src.sketch.sections import Section
 from src.sketch.fixes.sections import fix_duplicate_sections, fix_missing_sections
+import logging
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -35,7 +37,7 @@ class Sketch:
     def get_line_end_tokenized_indices(self, tokenized_sequence):
         tokens = (
             tokenized_sequence[0]
-            if isinstance(tokenized_sequence[0], list)
+            if isinstance(tokenized_sequence, list)
             else tokenized_sequence
         )
 

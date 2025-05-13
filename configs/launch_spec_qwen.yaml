@@ -8,15 +8,17 @@ model:
   name: "qwen:ahmedheakl/ex19_qwen2.5-1.5b-1M-stack-16kcw"
   is_enc_dec: false
   checkpoint: "..." 
-  max_length: 4096
+  max_length: 15500
 
 # Inference Configuration
 inference:
-  beam_size: 50
+  beam_size: 2
   temperature: 0.7
-  k: 20
-  num_guesses: 50
+  k: 5
+  num_guesses: 1
   lambda_val: 0.95
+  batch_size: 1
+
 
 # Language Configuration
 language:

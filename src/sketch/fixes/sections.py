@@ -1,14 +1,17 @@
+from __future__ import annotations
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from src.sketch.sketch import Sketch
 import torch
 import numpy as np
 from typing import List
-
-from src.sketch.sketch import Sketch
 from src.sketch.sections import Section
 from src.helpers.model import InferenceConfig, PredictionResult
 from src.sketch.uni_parser import parse_assembly
 from src.sketch.uni_parser.ast import Instruction, Symbol
 from src.helpers.dataset import DatasetInstance, AssemblyLanguage
 from src.sketch.instruction_mapping import get_mappings_for_lang, InstructionType
+import new_qwen
 
 
 def section_confidence(section: Section, prediction: PredictionResult) -> float:
@@ -41,7 +44,7 @@ def remove_sections(sections: List[Section], prediction: PredictionResult) -> Pr
     )
 
 
-def fix_duplicate_sections(sketch: Sketch, prediction: PredictionResult) -> [PredictionResult, int]:
+def fix_duplicate_sections(sketch: "Sketch", prediction: PredictionResult) -> [PredictionResult, int]:
     cleaned_pred = prediction
 
     sections = sketch.extract_sections(prediction.pred)
@@ -65,7 +68,7 @@ def fix_duplicate_sections(sketch: Sketch, prediction: PredictionResult) -> [Pre
 
 
 def fix_missing_sections(
-    sketch: Sketch, 
+    sketch: "Sketch", 
     prediction: PredictionResult,
 ) -> [PredictionResult, int]:
     fixed_pred = prediction
@@ -115,10 +118,12 @@ def fix_missing_sections(
                 target_lang=AssemblyLanguage.from_str(target_lang),
             )
 
-            new_section = sketch.model.predict(
-                instance=source_section_instance,
-                config=InferenceConfig(),
-            )
+            # new_section = sketch.model.predict(
+            #     instance=source_section_instance,
+            #     config=InferenceConfig(),
+            # )
+            new_section = new_qwen.predict(source_section_instance)
+
 
             source_offset = fixed_pred.source.shape[1]
 

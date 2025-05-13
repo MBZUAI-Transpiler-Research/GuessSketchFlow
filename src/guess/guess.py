@@ -85,11 +85,11 @@ class Guess:
 
         # Configure inference parameters
         self.inference_cfg = InferenceConfig(
-            beam_size=self.config.inference_params.get("beam_size", 5),
+            beam_size=self.config.inference_params.get("beam_size", 2),
             temperature=self.config.inference_params.get("temperature", 0.7),
             max_length=self.config.model_max_length,
             num_return_sequences=self.config.inference_params.get(
-                "num_guesses", 5
+                "num_guesses", 1
             )
         )
 
@@ -98,7 +98,7 @@ class Guess:
             source_lang=self.config.source_lang,
             target_lang=self.config.target_lang,
             dataset_name=self.config.dataset_name,
-            batch_size=self.config.inference_params.get("batch_size", 32),
+            batch_size=self.config.inference_params.get("batch_size", 1),
             evaluation_metrics=["compilation"]
         )
         self.dataset = Dataset.from_config(dataset_config)

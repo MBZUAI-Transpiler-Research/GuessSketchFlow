@@ -5,6 +5,7 @@ import torch
 import json
 import pickle
 from src.helpers.model import PredictionResult
+from src.helpers.dataset import DatasetInstance
 import gc
 import torch.nn.functional as F
 
@@ -181,10 +182,8 @@ def get_alignments(pred_outputs, prompt_len, top_k=5, batch_size=1):
     # Handle case where sequence is too long - take subset of attention maps
     #max_attn_to_process = min(100, len(pred_outputs.attentions))
     #process_indices = list(range(0, max_attn_to_process, max(1, max_attn_to_process // 100)))
-    max_attn_to_process = len(pred_outputs.attentions)
-    process_indices = list(range(0, max_attn_to_process))
     
-    for idx in process_indices:
+    for idx in range(len(pred_outputs.attentions)):
         if idx >= len(pred_outputs.attentions):
             continue
             
@@ -266,7 +265,36 @@ def edit_distance_assembly(gt: str, pred: str) -> int:
 
     return distance
 
+def predict(instance: DatasetInstance) -> PredictionResult:
+    """
+    Predict function wrapping the standalone inference pipeline.
+    Returns a PredictionResult for use in downstream components like fix_missing_sections.
+    """
 
+    asm_x86 = instance.source
+    pred_dec, response_token_ids, input_token_ids, alignments, confidence = inference(asm_x86)
+
+    # Convert to torch tensors for compatibility with rest of system
+    source=torch.tensor(input_token_ids).unsqueeze(0)
+    pred=torch.tensor(response_token_ids).unsqueeze(0)
+
+    distance = edit_distance_assembly(instance.target, pred_dec)
+
+    result = PredictionResult(
+        instance_id=instance.instance_id,
+        source=source,
+        pred=pred,
+        alignments=alignments,
+        confidence=confidence,
+        pred_dec=pred_dec,
+        levenshtein_distance=distance,
+    )
+
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
+    return result
 
 def main():
     print("Running")
@@ -366,11 +394,11 @@ def main():
                 file_name = data["files"][i]
                 instance_id = file_name
                 
-                # Create lightweight PredictionResult
+                    # Create lightweight PredictionResult
                 result = PredictionResult(
                     instance_id=instance_id,
-                    source=input_x86,  # Skip tokenization 
-                    pred=pred_arm,    # Skip tokenization
+                    source=torch.tensor(input_x86).unsqueeze(0),
+                    pred=torch.tensor(pred_arm).unsqueeze(0),
                     alignments=data["alignment"][i],
                     confidence=data["confidence"][i],
                 )
