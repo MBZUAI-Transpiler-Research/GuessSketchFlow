@@ -9,7 +9,7 @@ FAIL_LOG="failed.txt"
 > "$SUCCESS_LOG"
 > "$FAIL_LOG"
 
-for dir in eval/problem*; do
+for dir in problem*; do
     echo "Processing $dir"
 
     TEST_C="$dir/test.c"
@@ -47,13 +47,17 @@ for dir in eval/problem*; do
         continue
     fi
 
-    # Run
-    "$EXEC"
-    if [[ $? -eq 0 ]]; then
+    # Run with a 5-second timeout
+    timeout 10s "$EXEC"
+    EXIT_CODE=$?
+    if [[ $EXIT_CODE -eq 0 ]]; then
         echo "Passed: $dir"
         echo "$dir" >> "$SUCCESS_LOG"
+    elif [[ $EXIT_CODE -eq 124 ]]; then
+        echo "Timeout: $dir"
+        echo "$dir (timeout)" >> "$FAIL_LOG"
     else
-        echo "Failed: $dir"
+        echo "Failed: $dir (exit code: $EXIT_CODE)"
         echo "$dir" >> "$FAIL_LOG"
     fi
 done
