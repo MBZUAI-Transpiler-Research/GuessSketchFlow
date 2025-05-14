@@ -3,8 +3,8 @@ from dataclasses import dataclass
 from src.sketch.pure_blocks import is_pure_line, PureInstructionBlock
 from src.sketch.compare_helpers import compare_line_instructions
 from typing import List, Tuple, Dict
-from src.config import Config
 from src.helpers.model import Model, PredictionResult
+from src.helpers.launch_spec import LaunchSpec
 from src.sketch.uni_parser import parse_assembly
 from src.sketch.uni_parser.ast import Label
 from src.sketch.z3_helpers import blocks_equivalent_z3, extract_block_info, is_valid_block_pair
@@ -22,7 +22,7 @@ class SketchResult:
 
 
 class Sketch:
-    def __init__(self, config: Config, model: Model) -> None:
+    def __init__(self, launch_spec: LaunchSpec, model: Model) -> None:
         self.config = config
         self.model = model
 
@@ -35,11 +35,7 @@ class Sketch:
         return spans
 
     def get_line_end_tokenized_indices(self, tokenized_sequence):
-        tokens = (
-            tokenized_sequence[0]
-            if isinstance(tokenized_sequence, list)
-            else tokenized_sequence
-        )
+        tokens = tokenized_sequence
 
         line_end_indices = []
         for i, token_id in enumerate(tokens):
@@ -49,8 +45,8 @@ class Sketch:
         return line_end_indices
 
     def map_predicted_lines_to_source_lines(self, input_ids, output_ids, aligned_tokens, top_k=10, vote_threshold=1):
-        input_line_ends = self.get_line_end_tokenized_indices(input_ids[0])
-        output_line_ends = self.get_line_end_tokenized_indices(output_ids[0])
+        input_line_ends = self.get_line_end_tokenized_indices(input_ids)
+        output_line_ends = self.get_line_end_tokenized_indices(output_ids)
 
         print(f"[DEBUG] Input line ends: {input_line_ends}")
         print(f"[DEBUG] Output line ends: {output_line_ends}")
@@ -86,8 +82,10 @@ class Sketch:
             for idx in top_lines:
                 in_start, in_end = input_line_spans[idx]
 
-                output_line = self.model.tokenizer.decode(output_ids[0][out_start:out_end])
-                input_line = self.model.tokenizer.decode(input_ids[0][in_start:in_end])
+                output_line = self.model.tokenizer.decode(
+                    output_ids[out_start:out_end])
+                input_line = self.model.tokenizer.decode(
+                    input_ids[in_start:in_end])
 
                 score = compare_line_instructions(
                     output_line,
@@ -109,14 +107,15 @@ class Sketch:
         return line_mapping
 
     def extract_sections(self, output_ids) -> List[Section]:
-        output_line_ends = self.get_line_end_tokenized_indices(output_ids[0])
+        output_line_ends = self.get_line_end_tokenized_indices(output_ids)
         output_line_spans = self.get_line_spans(output_line_ends)
 
         sections = []
         current_section = None
 
         for i, (line_start, line_end) in enumerate(output_line_spans):
-            line = self.model.tokenizer.decode(output_ids[0][line_start:line_end])
+            line = self.model.tokenizer.decode(
+                output_ids[line_start:line_end])
             ast = parse_assembly(line)
 
             if not ast:
@@ -142,8 +141,8 @@ class Sketch:
     def extract_pure_instruction_blocks(
         self, input_ids, output_ids, line_mapping
     ) -> List[PureInstructionBlock]:
-        input_line_ends = self.get_line_end_tokenized_indices(input_ids[0])
-        output_line_ends = self.get_line_end_tokenized_indices(output_ids[0])
+        input_line_ends = self.get_line_end_tokenized_indices(input_ids)
+        output_line_ends = self.get_line_end_tokenized_indices(output_ids)
 
         input_line_spans = self.get_line_spans(input_line_ends)
         output_line_spans = self.get_line_spans(output_line_ends)
@@ -158,8 +157,10 @@ class Sketch:
             out_start, out_end = output_line_spans[i]
             in_start, in_end = input_line_spans[src_idx]
 
-            output_line = self.model.tokenizer.decode(output_ids[0][out_start:out_end])
-            input_line = self.model.tokenizer.decode(input_ids[0][in_start:in_end])
+            output_line = self.model.tokenizer.decode(
+                output_ids[out_start:out_end])
+            input_line = self.model.tokenizer.decode(
+                input_ids[in_start:in_end])
 
             # Skip non-pure lines
             if not is_pure_line(output_line, self.config.target_lang) or not is_pure_line(input_line, self.config.source_lang):
@@ -175,8 +176,10 @@ class Sketch:
             while pred_start > 0 and src_start > 0:
                 out_start, out_end = output_line_spans[pred_start - 1]
                 in_start, in_end = input_line_spans[src_start - 1]
-                output_line = self.model.tokenizer.decode(output_ids[0][out_start:out_end])
-                input_line = self.model.tokenizer.decode(input_ids[0][in_start:in_end])
+                output_line = self.model.tokenizer.decode(
+                    output_ids[out_start:out_end])
+                input_line = self.model.tokenizer.decode(
+                    input_ids[in_start:in_end])
 
                 score = compare_line_instructions(
                     output_line,
@@ -193,11 +196,13 @@ class Sketch:
                     break
 
             # Go down
-            while pred_end < len(output_line_spans) and src_end < len(input_line_spans):  
+            while pred_end < len(output_line_spans) and src_end < len(input_line_spans):
                 out_start, out_end = output_line_spans[pred_end]
                 in_start, in_end = input_line_spans[src_end]
-                output_line = self.model.tokenizer.decode(output_ids[0][out_start:out_end])
-                input_line = self.model.tokenizer.decode(input_ids[0][in_start:in_end])
+                output_line = self.model.tokenizer.decode(
+                    output_ids[out_start:out_end])
+                input_line = self.model.tokenizer.decode(
+                    input_ids[in_start:in_end])
 
                 score = compare_line_instructions(
                     output_line,
@@ -248,19 +253,22 @@ class Sketch:
                     pred_dec=pred.pred_dec,
                     levenshtein_distance=pred.levenshtein_distance
                 )
-                fixed_pred, duplicates = fix_duplicate_sections(self, fixed_pred)
+                fixed_pred, duplicates = fix_duplicate_sections(
+                    self, fixed_pred)
                 fixed_pred, missing = fix_missing_sections(self, fixed_pred)
 
-                fixed_pred.pred_dec = self.model.decode(fixed_pred.pred[0])
+                fixed_pred.pred_dec = self.model.decode(fixed_pred.pred)
 
                 stats = {
                     "duplicates": duplicates,
                     "missing": missing
                 }
 
-                sketch_results[instance_id] = (fixed_pred, self._sketch_single(fixed_pred), stats)
+                sketch_results[instance_id] = (
+                    fixed_pred, self._sketch_single(fixed_pred), stats)
             except Exception as e:
-                logger.error(f"Failed to process instance {instance_id}: {str(e)}")
+                logger.error(
+                    f"Failed to process instance {instance_id}: {str(e)}")
                 sketch_results[instance_id] = (pred, None, None)
 
         return sketch_results
@@ -294,17 +302,19 @@ class Sketch:
 
     def process_block(self, block: PureInstructionBlock, prediction: PredictionResult) -> SketchResult:
         source_text = self.model.tokenizer.decode(
-            prediction.source[0][block.source_start:block.source_end]
+            prediction.source[block.source_start:block.source_end]
         ).strip()
         pred_text = self.model.tokenizer.decode(
-            prediction.pred[0][block.pred_start:block.pred_end]
+            prediction.pred[block.pred_start:block.pred_end]
         ).strip()
 
         source_instructions = parse_assembly(source_text)
         pred_instructions = parse_assembly(pred_text)
 
-        source_z3_block = extract_block_info(source_instructions, self.config.source_lang)
-        pred_z3_block = extract_block_info(pred_instructions, self.config.target_lang)
+        source_z3_block = extract_block_info(
+            source_instructions, self.config.source_lang)
+        pred_z3_block = extract_block_info(
+            pred_instructions, self.config.target_lang)
 
         invalid_blocks = []
         non_equivalent_blocks = []

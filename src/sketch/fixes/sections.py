@@ -19,22 +19,22 @@ def section_confidence(section: Section, prediction: PredictionResult) -> float:
 
 
 def remove_sections(sections: List[Section], prediction: PredictionResult) -> PredictionResult:
-    pred = prediction.pred[0]
+    pred = prediction.pred
     confidence = prediction.confidence
     alignments = prediction.alignments
 
     sections.sort(key=lambda section: section.start)
-    
+
     mask = np.ones(len(pred), dtype=bool)
-    
+
     for section in sections:
         mask[section.start:section.end] = False
-    
+
     filtered_pred = pred[mask]
 
     filtered_confidence = np.array(confidence)[mask].tolist()
     filtered_alignments = np.array(alignments)[mask].tolist()
-    
+
     return PredictionResult(
         instance_id=prediction.instance_id,
         source=prediction.source,
@@ -56,11 +56,12 @@ def fix_duplicate_sections(sketch: "Sketch", prediction: PredictionResult) -> [P
             sections_by_name[section.name] = [section]
 
     duplicates = 0
-    
+
     for section_name, sections in sections_by_name.items():
         if len(sections) > 1:
             duplicates += len(sections) - 1
-            sections.sort(key=lambda section: section_confidence(section, prediction), reverse=True)
+            sections.sort(key=lambda section: section_confidence(
+                section, prediction), reverse=True)
 
             cleaned_pred = remove_sections(sections[1:], cleaned_pred)
 
@@ -68,7 +69,7 @@ def fix_duplicate_sections(sketch: "Sketch", prediction: PredictionResult) -> [P
 
 
 def fix_missing_sections(
-    sketch: "Sketch", 
+    sketch: "Sketch",
     prediction: PredictionResult,
 ) -> [PredictionResult, int]:
     fixed_pred = prediction
@@ -78,11 +79,13 @@ def fix_missing_sections(
     target_lang = sketch.config.target_lang
 
     pred_sections = sketch.extract_sections(prediction.pred)
-    pred_sections_by_name = {section.name: section for section in pred_sections}
+    pred_sections_by_name = {
+        section.name: section for section in pred_sections}
 
     source_sections = sketch.extract_sections(prediction.source)
-    source_sections_by_name = {section.name: section for section in source_sections}
-    
+    source_sections_by_name = {
+        section.name: section for section in source_sections}
+
     pred_assembly = sketch.model.tokenizer.decode(prediction.pred[0])
     for line in pred_assembly.split('\n'):
         instruction = parse_assembly(line)
@@ -90,22 +93,24 @@ def fix_missing_sections(
             continue
 
         instruction = instruction[0]
-        
-        instruction_type, instruction_semantic = get_mappings_for_lang(target_lang).get(instruction.name, (None, None))
-        
+
+        instruction_type, instruction_semantic = get_mappings_for_lang(
+            target_lang).get(instruction.name, (None, None))
+
         if instruction_type != InstructionType.BRANCHING:
             continue
 
         if instruction_semantic not in ["branch_eq", "branch_ne", "branch_gt", "branch_ge", "branch_lt", "branch_le", "jump"]:
             continue
-        
-        dest_section = [operand for operand in instruction.operands if isinstance(operand, Symbol)][0].name
- 
+
+        dest_section = [operand for operand in instruction.operands if isinstance(
+            operand, Symbol)][0].name
+
         if dest_section not in pred_sections_by_name:
             if dest_section not in source_sections_by_name:
                 print("Missing section:", dest_section)
                 continue
-            
+
             source_section = source_sections_by_name[dest_section]
             source_section_assembly = sketch.model.tokenizer.decode(
                 prediction.source[0][source_section.start:source_section.end]
@@ -124,17 +129,16 @@ def fix_missing_sections(
             # )
             new_section = new_qwen.predict(source_section_instance)
 
-
             source_offset = fixed_pred.source.shape[1]
 
             new_pred = torch.cat([
-                fixed_pred.pred[0],
-                new_section.pred[0].to(fixed_pred.pred[0].device),
-            ]).unsqueeze(0)
+                fixed_pred.pred,
+                new_section.pred.to(fixed_pred.pred.device),
+            ])
             new_source = torch.cat([
-                fixed_pred.source[0],
-                new_section.source[0].to(fixed_pred.source[0].device),
-            ]).unsqueeze(0)
+                fixed_pred.source,
+                new_section.source.to(fixed_pred.source.device),
+            ])
             fixed_pred.pred = new_pred
             fixed_pred.source = new_source
 
@@ -157,5 +161,5 @@ def fix_missing_sections(
             )
 
             missing += 1
-            
+
     return fixed_pred, missing

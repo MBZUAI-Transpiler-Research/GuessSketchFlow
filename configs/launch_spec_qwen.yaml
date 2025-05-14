@@ -1,46 +1,17 @@
 run:
   name: "qwen2.5_1.5b_run_on_humaneval_x86_to_arm64"
-  timestamp: null 
-  save_artifacts_path: "artifacts/"
-  
-# Model Configuration
-model:
-  name: "qwen:ahmedheakl/ex19_qwen2.5-1.5b-1M-stack-16kcw"
-  is_enc_dec: false
-  checkpoint: "..." 
-  max_length: 15500
 
-# Inference Configuration
-inference:
-  beam_size: 2
+model:
+  name: "ahmedheakl/ex19_qwen2.5-1.5b-1M-stack-16kcw"
+  architecture: "qwen"
+  max_length: 15500
+  num_beams: 2
+  num_return_sequences: 1
   temperature: 0.7
   k: 5
-  num_guesses: 1
-  lambda_val: 0.95
-  batch_size: 1
 
-
-# Language Configuration
-language:
+dataset:
+  name: "ahmedheakl/asm2asm_bringup_O0"
+  split: "train"
   source_lang: "x86"
   target_lang: "arm64"
-  viceversa: false
-
-# Data Configuration
-dataset:
-  name: "bringup"
-  gcc_args: "..."
-  additional_notes: "..."
-
-# Feature Flags
-features:
-  guess: false
-  sketch: false
-  few_shot: false
-  verbose: false
-  log_attention_maps: true
-
-# Sketch Configuration
-sketch:
-  template_path: "scratch_sketch.rkt"
-  view_uncertain: ""

@@ -6,22 +6,22 @@ from src.guess.guess import ConfigType, Guess, Config
 from src.domain.datasets.UnixCommandDataset import UnixCommandDataset  # Register dataset
 from src.domain.datasets.ProjectEulerDataset import ProjectEulerDataset
 from src.domain.datasets.BringUpDataset import BringUpDataset
+from src.helpers.launch_spec import LaunchSpec
 from src.sketch.sketch import Sketch  # Register dataset
 from new_qwen import main as ahmed_model
 
 if __name__ == "__main__":
-    # Using QWEN model for ARM to x86 translation
-    config = Config(ConfigType.QWEN_X862ARM64.get_path())
-    guess = Guess(config=config)
-    # predictions = ahmed_model()
-    # #predictions = guess.guess()
-    # print("Inference complete.")
+    launch_spec = LaunchSpec.from_yaml("configs/qwen_x862arm64.yaml")
 
-    # with open("predictions.pkl", "wb") as f:
-    #     pickle.dump(predictions, f)
-    
-    with open("predictions.pkl", "rb") as f:
-        predictions = pickle.load(f)
+    guess = Guess(launch_spec)
+    predictions = guess.guess()
+    print("Inference complete.")
+
+    with open("predictions.pkl", "wb") as f:
+        pickle.dump(predictions, f)
+
+    # with open("predictions.pkl", "rb") as f:
+    #     predictions = pickle.load(f)
 
     print("Loaded predictions from file.")
 
