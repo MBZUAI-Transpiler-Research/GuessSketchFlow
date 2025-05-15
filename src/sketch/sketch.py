@@ -52,6 +52,9 @@ class Sketch:
         input_line_ends = self.get_line_end_tokenized_indices(input_ids[0])
         output_line_ends = self.get_line_end_tokenized_indices(output_ids[0])
 
+        print(f"[DEBUG] Input line ends: {input_line_ends}")
+        print(f"[DEBUG] Output line ends: {output_line_ends}")
+
         input_line_spans = self.get_line_spans(input_line_ends)
         output_line_spans = self.get_line_spans(output_line_ends)
 
@@ -92,6 +95,7 @@ class Sketch:
                     self.config.target_lang,
                     self.config.source_lang
                 )
+                print(f"[DEBUG] Comparing lines:\nIN:  {input_line}\nOUT: {output_line}\n→ Score: {score:.4f}")
                 if score > best_score:
                     best_score = score
                     best_match = idx
@@ -101,6 +105,7 @@ class Sketch:
             else:
                 line_mapping.append((i, None))
 
+        print(f"[DEBUG] Final line mappings: {line_mapping}")
         return line_mapping
 
     def extract_sections(self, output_ids) -> List[Section]:
@@ -221,6 +226,7 @@ class Sketch:
                 pred_start=pred_token_start,
                 pred_end=pred_token_end
             ))
+        print(f"[DEBUG] Final blocks extracted: {len(blocks)}")
 
         return blocks
 

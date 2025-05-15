@@ -13,17 +13,17 @@ if __name__ == "__main__":
     # Using QWEN model for ARM to x86 translation
     config = Config(ConfigType.QWEN_X862ARM64.get_path())
     guess = Guess(config=config)
-    predictions = ahmed_model()
-    #predictions = guess.guess()
-    print("Inference complete.")
+    # predictions = ahmed_model()
+    # #predictions = guess.guess()
+    # print("Inference complete.")
 
-    with open("predictions.pkl", "wb") as f:
-        pickle.dump(predictions, f)
+    # with open("predictions.pkl", "wb") as f:
+    #     pickle.dump(predictions, f)
     
-    # with open("predictions.pkl", "rb") as f:
-    #     predictions = pickle.load(f)
+    with open("predictions.pkl", "rb") as f:
+        predictions = pickle.load(f)
 
-    # print("Loaded predictions from file.")
+    print("Loaded predictions from file.")
 
     sketch = Sketch(config=config, model=guess.model)
     sketch_results = sketch.sketch(predictions)
