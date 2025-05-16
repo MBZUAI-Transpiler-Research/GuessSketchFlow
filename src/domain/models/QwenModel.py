@@ -9,7 +9,7 @@ import torch.nn.functional as F
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from src.helpers.dataset import DatasetInstance
-from src.helpers.model import Model, InferenceConfig, PredictionResult
+from src.helpers.model import Model, ModelConfig, PredictionResult, get_device
 
 logger = logging.getLogger(__name__)
 
@@ -17,13 +17,7 @@ logger = logging.getLogger(__name__)
 class QwenModel(Model):
     def __init__(self, model_name: str, device: Optional[str] = "auto"):
         if device is None:
-            device = torch.device(
-                "cuda:0" if torch.cuda.is_available() else "cpu"
-            )
-
-        logger.info(
-            f"Initializing QwenModel with {model_name} on device {device}"
-        )
+            device = get_device()
 
         start_time = time.time()
 
@@ -36,7 +30,6 @@ class QwenModel(Model):
 
         device_resolved = self.model.device
         super().__init__(tokenizer, device=device_resolved)
-        self.model.eval()
 
         elapsed_time = time.time() - start_time
         logger.info(
@@ -44,19 +37,11 @@ class QwenModel(Model):
         )
 
     def prepare_prompt(self, source_code: str, source_lang: str, target_lang: str) -> str:
-        logger.debug(
-            f"Preparing prompt for {source_lang} -> {target_lang} conversion")
-        logger.debug(f"Source code length: {len(source_code)} characters")
-
-        system_prompt = (
-            f"You are a helpful coding assistant specialized in converting from {source_lang} to {target_lang} assembly."
-        )
         user_prompt = (
             f"Convert the following {source_lang} assembly code to {target_lang} assembly:\n"
             f"```{source_lang.lower()}asm\n{source_code}```"
         )
         messages = [
-            {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt}
         ]
         chat_text = self.tokenizer.apply_chat_template(
@@ -87,12 +72,9 @@ class QwenModel(Model):
     def infer(
         self,
         input_tokens: Dict[str, torch.Tensor],
-        config: Optional[InferenceConfig] = None,
+        config: ModelConfig,
         **kwargs
     ):
-        if config is None:
-            config = InferenceConfig()
-
         logger.info(
             f"Starting inference with temperature={config.temperature}, "
             f"max_length={config.max_length}"
@@ -105,7 +87,9 @@ class QwenModel(Model):
         context_size = 15500
         input_token_count = input_tokens["input_ids"].shape[1]
         max_new_tokens = max(
-            context_size - input_token_count, 1000)  # Ensure minimum
+            context_size - input_token_count, 
+            1000
+        )  # Ensure minimum
 
         # Fallback if input is still too large
         if input_token_count > context_size - 1000:
@@ -122,7 +106,7 @@ class QwenModel(Model):
             **input_tokens,
             max_new_tokens=max_new_tokens,
             temperature=config.temperature,
-            num_beams=config.beam_size,
+            num_beams=config.num_beams,
             num_return_sequences=config.num_return_sequences,
             do_sample=True,
             early_stopping=True,
@@ -132,7 +116,8 @@ class QwenModel(Model):
             eos_token_id=self.tokenizer.eos_token_id
         )
         alignments = self.get_alignments(
-            outputs, input_tokens.input_ids.shape[1])
+            outputs, input_tokens.input_ids.shape[1]
+        )
         confidence = self.get_confidence(outputs)
 
         gc.collect()
@@ -190,46 +175,18 @@ class QwenModel(Model):
 
         return confidences
 
-    def edit_distance_assembly(self, gt: str, pred: str) -> int:
-        def levenshtein(s1, s2):
-            if len(s1) < len(s2):
-                return levenshtein(s2, s1)
-            if len(s2) == 0:
-                return len(s1)
-            previous_row = range(len(s2) + 1)
-            for i, c1 in enumerate(s1):
-                current_row = [i + 1]
-                for j, c2 in enumerate(s2):
-                    insertions = previous_row[j + 1] + 1
-                    deletions = current_row[j] + 1
-                    substitutions = previous_row[j] + (c1 != c2)
-                    current_row.append(
-                        min(insertions, deletions, substitutions))
-                previous_row = current_row
-            return previous_row[-1]
-
-        def preprocess(code):
-            code = "\n".join(line.split(";")[0].strip()
-                             for line in code.split("\n"))
-            code = "\n".join(line for line in code.split("\n") if line.strip())
-            return code
-
-        gt_processed = preprocess(gt)
-        pred_processed = preprocess(pred)
-        return levenshtein(gt_processed, pred_processed)
-
     def predict(
         self,
         instance: DatasetInstance,
-        config: Optional[InferenceConfig] = None,
+        config: ModelConfig,
     ) -> PredictionResult:
         self.model.eval()
 
         with torch.no_grad():
             prompt = self.prepare_prompt(
                 instance.source,
-                instance.source_lang.value,
-                instance.target_lang.value
+                instance.source_lang,
+                instance.target_lang
             )
             tokenized_input = self.tokenize(prompt)
 
@@ -240,17 +197,19 @@ class QwenModel(Model):
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
 
-        decoded = self.decode(pred[1])
-        print("Decoded output:\n", decoded)
-        distance = self.edit_distance_assembly(instance.target, decoded)
-        print(f"Levenshtein distance: {distance}")
-
-        return PredictionResult(
+        result = PredictionResult(
             instance_id=instance.instance_id,
-            source=pred[0],
-            pred=pred[1],
+            source=pred[0].detach().cpu()[0],
+            pred=pred[1].detach().cpu()[0],
             alignments=pred[2],
             confidence=pred[3],
-            pred_dec=decoded,
-            levenshtein_distance=distance
         )
+
+        del pred
+        del tokenized_input
+        del prompt
+
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
+        return result

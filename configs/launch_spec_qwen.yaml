@@ -13,5 +13,6 @@ model:
 dataset:
   name: "ahmedheakl/asm2asm_bringup_O0"
   split: "train"
+  skip_files: ["anagram.s", "banner.s", "fft-int.s", "c-interp.s", "rho-factor.s", "satomi.s"]
   source_lang: "x86"
-  target_lang: "arm64"
+  target_lang: "arm"

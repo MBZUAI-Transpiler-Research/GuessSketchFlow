@@ -6,10 +6,10 @@ import torch
 import numpy as np
 from typing import List
 from src.sketch.sections import Section
-from src.helpers.model import InferenceConfig, PredictionResult
+from src.helpers.model import ModelConfig, PredictionResult
 from src.sketch.uni_parser import parse_assembly
 from src.sketch.uni_parser.ast import Instruction, Symbol
-from src.helpers.dataset import DatasetInstance, AssemblyLanguage
+from src.helpers.dataset import DatasetInstance
 from src.sketch.instruction_mapping import get_mappings_for_lang, InstructionType
 import new_qwen
 
@@ -75,8 +75,8 @@ def fix_missing_sections(
     fixed_pred = prediction
     missing = 0
 
-    source_lang = sketch.config.source_lang
-    target_lang = sketch.config.target_lang
+    source_lang = sketch.launch_spec.dataset_config.source_lang
+    target_lang = sketch.launch_spec.dataset_config.target_lang
 
     pred_sections = sketch.extract_sections(prediction.pred)
     pred_sections_by_name = {
@@ -86,7 +86,7 @@ def fix_missing_sections(
     source_sections_by_name = {
         section.name: section for section in source_sections}
 
-    pred_assembly = sketch.model.tokenizer.decode(prediction.pred[0])
+    pred_assembly = sketch.model.tokenizer.decode(prediction.pred)
     for line in pred_assembly.split('\n'):
         instruction = parse_assembly(line)
         if not instruction or not isinstance(instruction[0], Instruction):
@@ -123,13 +123,12 @@ def fix_missing_sections(
                 target_lang=AssemblyLanguage.from_str(target_lang),
             )
 
-            # new_section = sketch.model.predict(
-            #     instance=source_section_instance,
-            #     config=InferenceConfig(),
-            # )
-            new_section = new_qwen.predict(source_section_instance)
+            new_section = sketch.model.predict(
+                instance=source_section_instance,
+                config=sketch.launch_spec.model_config,
+            )
 
-            source_offset = fixed_pred.source.shape[1]
+            source_offset = fixed_pred.source.shape[0]
 
             new_pred = torch.cat([
                 fixed_pred.pred,

@@ -9,7 +9,7 @@ from transformers import PreTrainedTokenizer
 
 def get_device() -> torch.device:
     if torch.cuda.is_available():
-        return torch.device("cuda:0")
+        return torch.device("cuda:1")
     elif torch.backends.mps.is_available():
         return torch.device("mps")
 
@@ -49,5 +49,5 @@ class Model(ABC):
         )
 
     @abstractmethod
-    def predict(self, instance: DatasetInstance, config: Optional[InferenceConfig] = None) -> PredictionResult:
+    def predict(self, instance: DatasetInstance, config: ModelConfig) -> PredictionResult:
         pass

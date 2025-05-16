@@ -5,6 +5,7 @@ from src.domain.models.QwenModel import QwenModel
 from src.domain.models.BartLargeModel import BartLargeModel
 from src.helpers.launch_spec import LaunchSpec
 from src.helpers.dataset import DatasetInstance
+from datasets import load_dataset
 
 
 class Guess:
@@ -27,7 +28,7 @@ class Guess:
             )
 
         self.dataset = load_dataset(
-            launch_spec.dataset_config.name,
+            launch_spec.dataset_config.dataset_name,
             split=launch_spec.dataset_config.split
         )
 
@@ -35,6 +36,9 @@ class Guess:
         all_predictions = {}
 
         for raw_instance in self.dataset:
+            if raw_instance["file"] in self.launch_spec.dataset_config.skip_files:
+                continue
+
             instance = DatasetInstance(
                 instance_id=raw_instance["file"],
                 source_lang=self.launch_spec.dataset_config.source_lang,
@@ -44,7 +48,7 @@ class Guess:
             )
 
             try:
-                prediction = self.model.predict(instance, self.inference_cfg)
+                prediction = self.model.predict(instance, self.launch_spec.model_config)
                 all_predictions[instance.instance_id] = prediction
             except Exception as e:
                 all_predictions[instance.instance_id] = None

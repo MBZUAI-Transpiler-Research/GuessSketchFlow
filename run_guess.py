@@ -1,17 +1,19 @@
 #!/usr/bin/env python3
-"""Entry point for running the Guess module."""
 
+import os
 import pickle
-from src.guess.guess import ConfigType, Guess, Config
-from src.domain.datasets.UnixCommandDataset import UnixCommandDataset  # Register dataset
-from src.domain.datasets.ProjectEulerDataset import ProjectEulerDataset
-from src.domain.datasets.BringUpDataset import BringUpDataset
+import torch
+from src.guess.guess import Guess
 from src.helpers.launch_spec import LaunchSpec
-from src.sketch.sketch import Sketch  # Register dataset
+from src.sketch.sketch import Sketch
 from new_qwen import main as ahmed_model
 
 if __name__ == "__main__":
-    launch_spec = LaunchSpec.from_yaml("configs/qwen_x862arm64.yaml")
+    if torch.cuda.is_available():
+        torch.backends.cuda.matmul.allow_tf32 = True
+        os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+    
+    launch_spec = LaunchSpec.from_yaml("configs/launch_spec_qwen.yaml")
 
     guess = Guess(launch_spec)
     predictions = guess.guess()
@@ -25,7 +27,14 @@ if __name__ == "__main__":
 
     print("Loaded predictions from file.")
 
-    sketch = Sketch(config=config, model=guess.model)
+    failed_instances = []
+    for instance_id in predictions.keys():
+        if predictions[instance_id] is None:
+            failed_instances.append(instance_id)
+            
+    print("Percentage of failed predictions: {}".format(len(failed_instances) / len(predictions)))
+
+    sketch = Sketch(launch_spec=launch_spec, model=guess.model)
     sketch_results = sketch.sketch(predictions)
 
     with open("sketch_results.pkl", "wb") as f:

@@ -23,7 +23,7 @@ class SketchResult:
 
 class Sketch:
     def __init__(self, launch_spec: LaunchSpec, model: Model) -> None:
-        self.config = config
+        self.launch_spec = launch_spec
         self.model = model
 
     def get_line_spans(self, line_end_indices):
@@ -90,8 +90,8 @@ class Sketch:
                 score = compare_line_instructions(
                     output_line,
                     input_line,
-                    self.config.target_lang,
-                    self.config.source_lang
+                    self.launch_spec.dataset_config.target_lang,
+                    self.launch_spec.dataset_config.source_lang
                 )
                 print(f"[DEBUG] Comparing lines:\nIN:  {input_line}\nOUT: {output_line}\n→ Score: {score:.4f}")
                 if score > best_score:
@@ -115,7 +115,8 @@ class Sketch:
 
         for i, (line_start, line_end) in enumerate(output_line_spans):
             line = self.model.tokenizer.decode(
-                output_ids[line_start:line_end])
+                output_ids[line_start:line_end]
+            )
             ast = parse_assembly(line)
 
             if not ast:
@@ -163,7 +164,7 @@ class Sketch:
                 input_ids[in_start:in_end])
 
             # Skip non-pure lines
-            if not is_pure_line(output_line, self.config.target_lang) or not is_pure_line(input_line, self.config.source_lang):
+            if not is_pure_line(output_line, self.launch_spec.dataset_config.target_lang) or not is_pure_line(input_line, self.launch_spec.dataset_config.source_lang):
                 continue
 
             # Expand up and down from current line
@@ -184,11 +185,11 @@ class Sketch:
                 score = compare_line_instructions(
                     output_line,
                     input_line,
-                    self.config.target_lang,
-                    self.config.source_lang
+                    self.launch_spec.dataset_config.target_lang,
+                    self.launch_spec.dataset_config.source_lang
                 )
 
-                if is_pure_line(output_line, self.config.target_lang) and is_pure_line(input_line, self.config.source_lang) and score > 0.2:
+                if is_pure_line(output_line, self.launch_spec.dataset_config.target_lang) and is_pure_line(input_line, self.launch_spec.dataset_config.source_lang) and score > 0.2:
                     pred_start -= 1
                     src_start -= 1
                     seen_preds.add(pred_start)
@@ -200,18 +201,20 @@ class Sketch:
                 out_start, out_end = output_line_spans[pred_end]
                 in_start, in_end = input_line_spans[src_end]
                 output_line = self.model.tokenizer.decode(
-                    output_ids[out_start:out_end])
+                    output_ids[out_start:out_end]
+                )
                 input_line = self.model.tokenizer.decode(
-                    input_ids[in_start:in_end])
+                    input_ids[in_start:in_end]
+                )
 
                 score = compare_line_instructions(
                     output_line,
                     input_line,
-                    self.config.target_lang,
-                    self.config.source_lang
+                    self.launch_spec.dataset_config.target_lang,
+                    self.launch_spec.dataset_config.source_lang
                 )
 
-                if is_pure_line(output_line, self.config.target_lang) and is_pure_line(input_line, self.config.source_lang) and score > 0.2:
+                if is_pure_line(output_line, self.launch_spec.dataset_config.target_lang) and is_pure_line(input_line, self.launch_spec.dataset_config.source_lang) and score > 0.2:
                     seen_preds.add(pred_end)
                     pred_end += 1
                     src_end += 1
@@ -239,7 +242,7 @@ class Sketch:
         sketch_results = {}
         for instance_id, pred in predictions.items():
             if pred is None:
-                sketch_results[instance_id] = (None, None)
+                sketch_results[instance_id] = (None, None, None)
                 continue
 
             try:
@@ -250,14 +253,11 @@ class Sketch:
                     pred=pred.pred,
                     confidence=pred.confidence[:pred_len],
                     alignments=pred.alignments[:pred_len],
-                    pred_dec=pred.pred_dec,
-                    levenshtein_distance=pred.levenshtein_distance
                 )
                 fixed_pred, duplicates = fix_duplicate_sections(
-                    self, fixed_pred)
+                    self, fixed_pred
+                )
                 fixed_pred, missing = fix_missing_sections(self, fixed_pred)
-
-                fixed_pred.pred_dec = self.model.decode(fixed_pred.pred)
 
                 stats = {
                     "duplicates": duplicates,
@@ -265,10 +265,14 @@ class Sketch:
                 }
 
                 sketch_results[instance_id] = (
-                    fixed_pred, self._sketch_single(fixed_pred), stats)
+                    fixed_pred,
+                    self._sketch_single(fixed_pred),
+                    stats
+                )
             except Exception as e:
                 logger.error(
-                    f"Failed to process instance {instance_id}: {str(e)}")
+                    f"Failed to process instance {instance_id}: {str(e)}"
+                )
                 sketch_results[instance_id] = (pred, None, None)
 
         return sketch_results
@@ -312,9 +316,13 @@ class Sketch:
         pred_instructions = parse_assembly(pred_text)
 
         source_z3_block = extract_block_info(
-            source_instructions, self.config.source_lang)
+            source_instructions,
+            self.launch_spec.dataset_config.source_lang
+        )
         pred_z3_block = extract_block_info(
-            pred_instructions, self.config.target_lang)
+            pred_instructions,
+            self.launch_spec.dataset_config.target_lang
+        )
 
         invalid_blocks = []
         non_equivalent_blocks = []
@@ -325,8 +333,8 @@ class Sketch:
         is_equivalent = blocks_equivalent_z3(
             source_z3_block,
             pred_z3_block,
-            self.config.source_lang,
-            self.config.target_lang
+            self.launch_spec.dataset_config.source_lang,
+            self.launch_spec.dataset_config.target_lang
         )
 
         if not is_equivalent:

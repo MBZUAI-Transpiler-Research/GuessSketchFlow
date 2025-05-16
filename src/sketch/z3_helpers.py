@@ -124,7 +124,7 @@ z3_exec_x86 = {
 def get_z3_mappings_for_lang(lang: str):
     if lang == "riscv":
         return z3_exec_riscv
-    elif lang == "arm64":
+    elif lang == "arm64" or lang == "arm":
         return z3_exec_arm64
     elif lang == "x86":
         return z3_exec_x86
@@ -148,7 +148,7 @@ def extract_block_info(instructions: List[Instruction], block_lang: str) -> Z3In
         if block_lang == "riscv":
             dst = instr.operands[0]
             srcs = instr.operands[1:]
-        elif block_lang == "arm64":
+        elif block_lang == "arm64" or block_lang == "arm":
             dst = instr.operands[0]
             srcs = instr.operands[1:]
         elif block_lang == "x86":

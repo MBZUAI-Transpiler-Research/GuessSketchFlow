@@ -92,7 +92,7 @@ x86_mapping = {
 def get_mappings_for_lang(lang: str):
     if lang == "riscv":
         return riscv_mapping
-    elif lang == "arm64":
+    elif lang == "arm64" or lang == "arm":
         return arm64_mapping
     elif lang == "x86":
         return x86_mapping

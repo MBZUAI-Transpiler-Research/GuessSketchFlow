@@ -8,29 +8,15 @@ import torch.nn.functional as F
 from transformers import AutoModelForSeq2SeqLM, AutoTokenizer, AutoConfig
 
 from src.helpers.dataset import DatasetInstance
-from src.helpers.model import Model, InferenceConfig, PredictionResult
+from src.helpers.model import Model, ModelConfig, PredictionResult
 
 
 class BartLargeModel(Model):
-    """Implementation of BART-based transpiler model.
-
-    This class implements the Model interface using the BART architecture,
-    which is well-suited for sequence-to-sequence tasks like assembly
-    code translation. BART uses a bidirectional encoder and autoregressive
-    decoder architecture.
-    """
-
     def __init__(
         self,
         model_name: str,
-        device: Optional[str] = "cuda" if torch.cuda.is_available() else "cpu"
+        device: torch.device,
     ):
-        """Initialize BART model and tokenizer.
-
-        Args:
-            model_name: Hugging Face model ID or local checkpoint path
-            device: Device to place model on (cuda/cpu)
-        """
         tokenizer = AutoTokenizer.from_pretrained("facebook/bart-large")
         tokenizer.model_max_length = 2048
 
@@ -65,32 +51,12 @@ class BartLargeModel(Model):
         source_lang: str,
         target_lang: str
     ) -> str:
-        """Prepare text prompt for BART model.
-
-        Unlike chat-based models, BART uses a simple cloze-style input format.
-
-        Args:
-            source_code: Source assembly code
-            source_lang: Source assembly language
-            target_lang: Target assembly language
-
-        Returns:
-            Formatted prompt string
-        """
         return source_code
 
     def tokenize(
         self,
         text: Union[str, List[str]],
     ) -> Dict[str, torch.Tensor]:
-        """Tokenize input text and move tensors to device.
-
-        Args:
-            text: Input text or list of texts to tokenize
-
-        Returns:
-            Dict containing tokenized tensors on target device
-        """
         return self.tokenizer(
             text,
             return_tensors="pt",
@@ -100,15 +66,6 @@ class BartLargeModel(Model):
         self,
         token_ids: torch.Tensor,
     ) -> Union[str, List[str]]:
-        """Decode token IDs back to text.
-
-        Args:
-            token_ids: Tensor of token IDs to decode
-            **kwargs: Additional decoding arguments
-
-        Returns:
-            Single string if batch size is 1, otherwise list of strings
-        """
         decoded = self.tokenizer.batch_decode(
             token_ids,
             skip_special_tokens=True,
@@ -120,27 +77,14 @@ class BartLargeModel(Model):
     def infer(
         self,
         input_tokens: Dict[str, torch.Tensor],
-        config: Optional[InferenceConfig] = None,
+        config: ModelConfig,
     ):
-        """Perform inference using BART seq2seq model.
-
-        Args:
-            input_tokens: Dict containing input_ids and attention_mask
-            config: Optional inference configuration
-            **kwargs: Additional generation arguments
-
-        Returns:
-            InferenceResult containing generated tokens and metadata
-        """
-        if config is None:
-            config = InferenceConfig()
-
         outputs = self.model.generate(
             **input_tokens,
             max_new_tokens=config.max_length,
             temperature=config.temperature,
             num_return_sequences=config.num_return_sequences,
-            num_beams=config.beam_size,
+            num_beams=config.num_beams,
             do_sample=(config.temperature > 0),
             output_attentions=True,
             return_dict_in_generate=True,
@@ -211,7 +155,7 @@ class BartLargeModel(Model):
     def predict(
         self,
         instance: DatasetInstance,
-        config: Optional[InferenceConfig] = None,
+        config: ModelConfig,
     ) -> PredictionResult:
         sections, cloze = self.extract(instance.source)
         sections_pred = {}

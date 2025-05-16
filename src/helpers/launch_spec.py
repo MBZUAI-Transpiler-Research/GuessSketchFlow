@@ -51,7 +51,9 @@ class LaunchSpec:
         dataset_config = DatasetConfig(
             source_lang=dataset_dict.get('source_lang', ''),
             target_lang=dataset_dict.get('target_lang', ''),
-            dataset_name=dataset_dict.get('name', '')
+            dataset_name=dataset_dict.get('name', ''),
+            split=dataset_dict.get('split', ''),
+            skip_files=dataset_dict.get('skip_files', [])
         )
 
         return cls(
