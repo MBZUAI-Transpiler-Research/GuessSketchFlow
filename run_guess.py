@@ -16,14 +16,14 @@ if __name__ == "__main__":
     launch_spec = LaunchSpec.from_yaml("configs/launch_spec_qwen.yaml")
 
     guess = Guess(launch_spec)
-    predictions = guess.guess()
-    print("Inference complete.")
+    # predictions = guess.guess()
+    # print("Inference complete.")
 
-    with open("predictions.pkl", "wb") as f:
-        pickle.dump(predictions, f)
+    # with open("predictions.pkl", "wb") as f:
+    #     pickle.dump(predictions, f)
 
-    # with open("predictions.pkl", "rb") as f:
-    #     predictions = pickle.load(f)
+    with open("predictions.pkl", "rb") as f:
+        predictions = pickle.load(f)
 
     print("Loaded predictions from file.")
 

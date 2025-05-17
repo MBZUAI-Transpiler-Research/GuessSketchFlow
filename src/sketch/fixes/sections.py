@@ -103,8 +103,10 @@ def fix_missing_sections(
         if instruction_semantic not in ["branch_eq", "branch_ne", "branch_gt", "branch_ge", "branch_lt", "branch_le", "jump"]:
             continue
 
-        dest_section = [operand for operand in instruction.operands if isinstance(
-            operand, Symbol)][0].name
+        dest_section = [
+            operand for operand in instruction.operands if isinstance(
+                operand, Symbol)
+        ][0].name
 
         if dest_section not in pred_sections_by_name:
             if dest_section not in source_sections_by_name:
@@ -113,7 +115,7 @@ def fix_missing_sections(
 
             source_section = source_sections_by_name[dest_section]
             source_section_assembly = sketch.model.tokenizer.decode(
-                prediction.source[0][source_section.start:source_section.end]
+                prediction.source[source_section.start:source_section.end]
             )
             source_section_instance = DatasetInstance(
                 instance_id=prediction.instance_id,
