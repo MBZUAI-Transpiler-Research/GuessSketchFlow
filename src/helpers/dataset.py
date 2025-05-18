@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-
+from typing import List
 
 @dataclass
 class DatasetConfig:
@@ -7,7 +7,7 @@ class DatasetConfig:
     target_lang: str
     dataset_name: str
     split: str
-    skip_files: list[str]
+    skip_files: List[str]
 
 
 @dataclass

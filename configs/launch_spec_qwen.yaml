@@ -5,14 +5,14 @@ model:
   name: "ahmedheakl/ex19_qwen2.5-1.5b-1M-stack-16kcw"
   architecture: "qwen"
   max_length: 15500
-  num_beams: 2
+  num_beams: 1
   num_return_sequences: 1
   temperature: 0.7
   k: 5
 
 dataset:
-  name: "ahmedheakl/asm2asm_bench_armv8_O0"
+  name: "ahmedheakl/asm2asm_bringup_O0"
   split: "train"
-  # skip_files: ["anagram.s", "banner.s", "fft-int.s", "c-interp.s", "rho-factor.s", "satomi.s"]
+  skip_files: ["anagram.s", "banner.s", "fft-int.s", "c-interp.s", "rho-factor.s", "satomi.s"]
   source_lang: "x86"
   target_lang: "arm"

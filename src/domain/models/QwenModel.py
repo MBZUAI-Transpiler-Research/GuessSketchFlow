@@ -15,21 +15,29 @@ logger = logging.getLogger(__name__)
 
 
 class QwenModel(Model):
-    def __init__(self, model_name: str, device: Optional[str] = "auto"):
+    def __init__(self, model_name: str, device: Optional[str] = "cuda"):
         if device is None:
             device = get_device()
 
         start_time = time.time()
 
+        # self.model = AutoModelForCausalLM.from_pretrained(
+        #     model_name,
+        #     torch_dtype=torch.bfloat16,
+        # ).to(device)
         self.model = AutoModelForCausalLM.from_pretrained(
             model_name,
             torch_dtype=torch.bfloat16,
-        ).to(device)
+            device_map="auto",
+            attn_implementation="eager"
+        )
+        self.model.eval()
 
         tokenizer = AutoTokenizer.from_pretrained(model_name)
 
-        device_resolved = self.model.device
-        super().__init__(tokenizer, device=device_resolved)
+        # device_resolved = self.model.device
+        # super().__init__(tokenizer, device=device_resolved)
+        super().__init__(tokenizer, device="cuda")
 
         elapsed_time = time.time() - start_time
         logger.info(
@@ -84,7 +92,7 @@ class QwenModel(Model):
         )
 
         # Dynamically calculate max_new_tokens
-        context_size = 15500
+        context_size = 8000
         input_token_count = input_tokens["input_ids"].shape[1]
         max_new_tokens = max(
             context_size - input_token_count, 
@@ -101,20 +109,37 @@ class QwenModel(Model):
                 context_size - 2000)]
             input_token_count = input_tokens["input_ids"].shape[1]
             max_new_tokens = max(context_size - input_token_count, 1000)
-
-        outputs = self.model.generate(
-            **input_tokens,
-            max_new_tokens=max_new_tokens,
-            temperature=config.temperature,
-            num_beams=config.num_beams,
-            num_return_sequences=config.num_return_sequences,
-            do_sample=True,
-            early_stopping=True,
-            output_attentions=True,
-            return_dict_in_generate=True,
-            output_scores=True,
-            eos_token_id=self.tokenizer.eos_token_id
-        )
+        print(f"Inferencing {max_new_tokens} ...")
+        with torch.no_grad():
+            outputs = self.model.generate(
+                **input_tokens,
+                max_new_tokens=max_new_tokens,
+                temperature=config.temperature,
+                num_beams=config.num_beams,
+                num_return_sequences=config.num_return_sequences,
+                do_sample=True,
+                early_stopping=True,
+                output_attentions=True,
+                return_dict_in_generate=True,
+                output_scores=True,
+                eos_token_id=self.tokenizer.eos_token_id,
+                use_cache=True,
+            )
+        # import matplotlib.pyplot as plt
+        # save 3 random attention maps as heat maps
+        # for i in range(3):
+        #     try:
+        #         attn = outputs.attentions[i][-1]
+        #         attn = attn.mean(dim=1)[:, 0].detach().cpu()
+        #         attn = attn.squeeze(0).numpy()
+        #         # Save the attention map as a heatmap
+        #         plt.imshow(attn, cmap='hot', interpolation='nearest')
+        #         plt.colorbar()
+        #         plt.savefig(f"attention_map_{i}.png")
+        #         plt.close()
+        #     except Exception as e:
+        #         print(f"Error saving attention map {i}: {e}")
+        print("Finished Inferencing ...")
         alignments = self.get_alignments(
             outputs, input_tokens.input_ids.shape[1]
         )

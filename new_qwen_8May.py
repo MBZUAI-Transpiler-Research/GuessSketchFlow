@@ -187,10 +187,10 @@ def get_alignments(pred_outputs, prompt_len, top_k=5, batch_size=1):
         # Process just this single attention map
         try:
             # Get only the last layer
-            attn = pred_outputs.attentions[idx][-1]
+            attn = pred_outputs.attentions[idx][-1].cpu()
             
             # Move to CPU immediately and keep only what we need
-            last_layer_attn = attn.mean(dim=1)[:, 0].detach().cpu()
+            last_layer_attn = attn.mean(dim=1)[:, 0]
             del attn
             
             # Get top indices
