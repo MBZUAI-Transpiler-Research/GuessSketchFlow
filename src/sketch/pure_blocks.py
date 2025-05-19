@@ -18,7 +18,7 @@ def is_pure_line(line: str, lang: str) -> bool:
         parsed_assembly = parse_assembly(line)
 
         if not parsed_assembly:
-            print(f"Failed to parse line [{lang}]: {line}")
+            # print(f"Failed to parse line [{lang}]: {line}")
             return False
 
         instr = parsed_assembly[0]
@@ -37,5 +37,5 @@ def is_pure_line(line: str, lang: str) -> bool:
         return True
 
     except Exception as e:
-        print(f"Failed to parse line [{lang}]: {line}\nError: {str(e)}")
+        # print(f"Failed to parse line [{lang}]: {line}\nError: {str(e)}")
         return False

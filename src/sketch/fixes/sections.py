@@ -38,7 +38,7 @@ def remove_sections(sections: List[Section], prediction: PredictionResult) -> Pr
     return PredictionResult(
         instance_id=prediction.instance_id,
         source=prediction.source,
-        pred=[filtered_pred],
+        pred=filtered_pred,
         alignments=filtered_alignments,
         confidence=filtered_confidence
     )
@@ -59,9 +59,12 @@ def fix_duplicate_sections(sketch: "Sketch", prediction: PredictionResult) -> [P
 
     for section_name, sections in sections_by_name.items():
         if len(sections) > 1:
+            print(f"Duplicate section: {section_name}")
             duplicates += len(sections) - 1
-            sections.sort(key=lambda section: section_confidence(
-                section, prediction), reverse=True)
+            sections.sort(
+                key=lambda section: section_confidence(section, prediction),
+                reverse=True
+            )
 
             cleaned_pred = remove_sections(sections[1:], cleaned_pred)
 
@@ -109,6 +112,8 @@ def fix_missing_sections(
         ][0].name
 
         if dest_section not in pred_sections_by_name:
+            missing += 1
+
             if dest_section not in source_sections_by_name:
                 print("Missing section:", dest_section)
                 continue
@@ -121,8 +126,8 @@ def fix_missing_sections(
                 instance_id=prediction.instance_id,
                 source=source_section_assembly,
                 target=source_section_assembly,
-                source_lang=AssemblyLanguage.from_str(source_lang),
-                target_lang=AssemblyLanguage.from_str(target_lang),
+                source_lang=source_lang,
+                target_lang=target_lang,
             )
 
             new_section = sketch.model.predict(
@@ -143,12 +148,10 @@ def fix_missing_sections(
             fixed_pred.pred = new_pred
             fixed_pred.source = new_source
 
-            shifted_alignments = torch.tensor(
-                [
-                    [src_idx + source_offset for src_idx in src_idxes]
-                    for src_idxes in new_section.alignments
-                ]
-            )
+            shifted_alignments = [
+                [src_idx + source_offset for src_idx in src_idxes]
+                for src_idxes in new_section.alignments
+            ]
             fixed_pred.alignments.extend(shifted_alignments)
             fixed_pred.confidence.extend(
                 new_section.confidence
@@ -160,7 +163,5 @@ def fix_missing_sections(
                 start=-1,
                 end=-1,
             )
-
-            missing += 1
 
     return fixed_pred, missing

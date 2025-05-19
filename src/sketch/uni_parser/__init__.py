@@ -17,6 +17,7 @@ class LexerBailErrorListener(ErrorListener):
 
 def parse_assembly(input_text: str):
     cleaned_text = input_text.split(";")[0].strip()
+    cleaned_text = cleaned_text.split("##")[0].strip()
     stream = InputStream(cleaned_text)
 
     lexer = UniAssemblyLexer(stream)

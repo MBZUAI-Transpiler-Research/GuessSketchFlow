@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 class QwenModel(Model):
-    def __init__(self, model_name: str, device: Optional[str] = "cuda"):
+    def __init__(self, model_name: str, device: Optional[str] = None):
         if device is None:
             device = get_device()
 
@@ -35,9 +35,9 @@ class QwenModel(Model):
 
         tokenizer = AutoTokenizer.from_pretrained(model_name)
 
-        # device_resolved = self.model.device
+        device_resolved = self.model.device
         # super().__init__(tokenizer, device=device_resolved)
-        super().__init__(tokenizer, device="cuda")
+        super().__init__(tokenizer, device=device_resolved)
 
         elapsed_time = time.time() - start_time
         logger.info(
@@ -95,7 +95,7 @@ class QwenModel(Model):
         context_size = 8000
         input_token_count = input_tokens["input_ids"].shape[1]
         max_new_tokens = max(
-            context_size - input_token_count, 
+            context_size - input_token_count,
             1000
         )  # Ensure minimum
 

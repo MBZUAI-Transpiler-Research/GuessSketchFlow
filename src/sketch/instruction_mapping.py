@@ -62,9 +62,20 @@ arm64_mapping = {
     "b":       (InstructionType.BRANCHING, "jump"),
     "bl":      (InstructionType.BRANCHING, "call"),
     "ret":     (InstructionType.BRANCHING, "return"),
-    "beq":     (InstructionType.BRANCHING, "branch_eq"),
-    "bne":     (InstructionType.BRANCHING, "branch_ne"),
-    "bgt":     (InstructionType.BRANCHING, "branch_gt"),
+    "b.ne":    (InstructionType.BRANCHING, "branch_ne"),
+    "b.ge":    (InstructionType.BRANCHING, "branch_ge"),
+    "b.gt":    (InstructionType.BRANCHING, "branch_gt"),
+    "b.le":    (InstructionType.BRANCHING, "branch_le"),
+    "b.lt":    (InstructionType.BRANCHING, "branch_lt"),
+    "b.eq":    (InstructionType.BRANCHING, "branch_eq"),
+    "b.hi":    (InstructionType.BRANCHING, "branch_hi"),
+    "b.hs":    (InstructionType.BRANCHING, "branch_hs"),
+    "b.lo":    (InstructionType.BRANCHING, "branch_lo"),
+    "b.ls":    (InstructionType.BRANCHING, "branch_ls"),
+    "tbz":     (InstructionType.BRANCHING, "branch_eq"),
+    "tbnz":    (InstructionType.BRANCHING, "branch_eq"),
+    "cbz":     (InstructionType.BRANCHING, "branch_eq"),
+    "cbnz":    (InstructionType.BRANCHING, "branch_eq"),
     "cset":    (InstructionType.BRANCHING, "condition_set")
 }
 
