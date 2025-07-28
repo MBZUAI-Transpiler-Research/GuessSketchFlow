@@ -1,115 +1,57 @@
-import logging
-import time
 from typing import Dict, List, Optional, Union
 import warnings
-
 import gc
 import torch
 import torch.nn.functional as F
-from transformers import AutoModelForCausalLM, AutoTokenizer
-
+from transformers import AutoModelForCausalLM, AutoTokenizer, BatchEncoding
 from src.helpers.dataset import DatasetInstance
-from src.helpers.model import Model, ModelConfig, PredictionResult, get_device
-
-logger = logging.getLogger(__name__)
-
+from src.helpers.model import Model, ModelConfig, PredictionResult
+import pickle   
 
 class QwenModel(Model):
-    def __init__(self, model_name: str, device: Optional[str] = None):
-        if device is None:
-            device = get_device()
+    def __init__(self, model_name: str):
 
-        start_time = time.time()
+        self.model = AutoModelForCausalLM.from_pretrained(model_name, torch_dtype=torch.bfloat16, device_map="auto", attn_implementation="eager")
+        self.model.eval() # ensures no gradients
+        tokenizer = AutoTokenizer.from_pretrained(model_name) # sets self.tokenizer()
+        super().__init__(tokenizer)
 
-        # self.model = AutoModelForCausalLM.from_pretrained(
-        #     model_name,
-        #     torch_dtype=torch.bfloat16,
-        # ).to(device)
-        self.model = AutoModelForCausalLM.from_pretrained(
-            model_name,
-            torch_dtype=torch.bfloat16,
-            device_map="auto",
-            attn_implementation="eager"
-        )
-        self.model.eval()
-
-        tokenizer = AutoTokenizer.from_pretrained(model_name)
-
-        device_resolved = self.model.device
-        # super().__init__(tokenizer, device=device_resolved)
-        super().__init__(tokenizer, device=device_resolved)
-
-        elapsed_time = time.time() - start_time
-        logger.info(
-            f"Model initialization completed in {elapsed_time:.2f} seconds"
-        )
-
+    # Builds a language-model-friendly prompt from the source code.
+    # Uses Qwen's chat template format for better alignment with training behavior. Returns a formatted prompt string (not tokenized).
     def prepare_prompt(self, source_code: str, source_lang: str, target_lang: str) -> str:
         user_prompt = (
             f"Convert the following {source_lang} assembly code to {target_lang} assembly:\n"
             f"```{source_lang.lower()}asm\n{source_code}```"
         )
-        messages = [
-            {"role": "user", "content": user_prompt}
-        ]
-        chat_text = self.tokenizer.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=True
-        )
+        messages = [{"role": "user", "content": user_prompt}]
+        chat_text = self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True) #tokenize separately with next function
         return chat_text
 
-    def tokenize(self, text: Union[str, List[str]], **kwargs) -> Dict[str, torch.Tensor]:
-        logger.debug(f"Tokenizing text{'s' if isinstance(text, list) else ''} "
-                     f"of length: {len(text) if isinstance(text, str) else len(text[0])}")
-
-        tokens = self.tokenizer(
-            text, return_tensors="pt", padding=True, truncation=True, **kwargs
-        ).to(self.device)
-
-        logger.debug(f"Tokenized shape: {tokens['input_ids'].shape}")
+    #Returns a BatchEncoding object that includes: input_ids: the actual token IDs, attention_mask: 1s for tokens to attend to, 0s for padding
+    def tokenize(self, text: Union[str, List[str]], **kwargs) -> BatchEncoding:
+        tokens = self.tokenizer(text, return_tensors="pt", padding=True, truncation=True, **kwargs)
         return tokens
 
+    # Decodes token IDs back into string(s).Automatically handles both single sequences and batches. Skips special tokens (e.g., <|endoftext|>).
     def decode(self, token_ids: torch.Tensor, **kwargs) -> Union[str, List[str]]:
-        decoded = self.tokenizer.batch_decode(
-            token_ids,
-            skip_special_tokens=True,
-        )
-        if token_ids.shape[0] == 1:
-            return decoded[0]
-        return decoded
+        if token_ids.dim() == 1:  # single sequence
+            token_ids = token_ids.unsqueeze(0)
+        decoded = self.tokenizer.batch_decode(token_ids, skip_special_tokens=True)
+        return decoded[0] if token_ids.size(0) == 1 else decoded
 
-    def infer(
-        self,
-        input_tokens: Dict[str, torch.Tensor],
-        config: ModelConfig,
-        **kwargs
-    ):
-        logger.info(
-            f"Starting inference with temperature={config.temperature}, "
-            f"max_length={config.max_length}"
-        )
-        logger.info(
-            f"Input shape: {input_tokens['input_ids'].shape}"
-        )
-
-        # Dynamically calculate max_new_tokens
+    def infer(self, input_tokens: Dict[str, torch.Tensor], config: ModelConfig, instance_id: Optional[str] = None, **kwargs):
+        # Dynamically calculate max_new_tokens. Remember: Hugging Face's tokenizer always adds a batch dimension
         context_size = 8000
-        input_token_count = input_tokens["input_ids"].shape[1]
-        max_new_tokens = max(
-            context_size - input_token_count,
-            1000
-        )  # Ensure minimum
+        input_token_count = input_tokens["input_ids"].shape[1] # input_tokens is shape [batch_size, sequence_length], so this gets length
+        max_new_tokens = max(context_size - input_token_count, 1000)  # Ensure minimum
 
         # Fallback if input is still too large
-        if input_token_count > context_size - 1000:
-            logger.warning(
-                f"Input exceeds safe context limit ({input_token_count} tokens). Truncating...")
-            input_tokens["input_ids"] = input_tokens["input_ids"][:, :(
-                context_size - 2000)]
-            input_tokens["attention_mask"] = input_tokens["attention_mask"][:, :(
-                context_size - 2000)]
-            input_token_count = input_tokens["input_ids"].shape[1]
-            max_new_tokens = max(context_size - input_token_count, 1000)
-        print(f"Inferencing {max_new_tokens} ...")
+        if input_token_count > context_size - 1000: #TRUE if max_new_tokens gets set to minimum
+            input_tokens["input_ids"] = input_tokens["input_ids"][:, :(context_size - 2000)] #truncates inputs tokens to ensure at least 2000 new tokens
+            input_tokens["attention_mask"] = input_tokens["attention_mask"][:, :(context_size - 2000)] #makes sure attention mask is same size as input_ids
+            input_token_count = input_tokens["input_ids"].shape[1] #gives updated sequence length after truncating
+            max_new_tokens = max(context_size - input_token_count, 1000) #updates to new value --- should be 2000
+        print(f"Inferencing {instance_id} ...")
         with torch.no_grad():
             outputs = self.model.generate(
                 **input_tokens,
@@ -125,63 +67,60 @@ class QwenModel(Model):
                 eos_token_id=self.tokenizer.eos_token_id,
                 use_cache=True,
             )
-        # import matplotlib.pyplot as plt
-        # save 3 random attention maps as heat maps
-        # for i in range(3):
-        #     try:
-        #         attn = outputs.attentions[i][-1]
-        #         attn = attn.mean(dim=1)[:, 0].detach().cpu()
-        #         attn = attn.squeeze(0).numpy()
-        #         # Save the attention map as a heatmap
-        #         plt.imshow(attn, cmap='hot', interpolation='nearest')
-        #         plt.colorbar()
-        #         plt.savefig(f"attention_map_{i}.png")
-        #         plt.close()
-        #     except Exception as e:
-        #         print(f"Error saving attention map {i}: {e}")
+
+        # Dump to pkl file
+        with open("outputs_debug.pkl", "wb") as f:
+            pickle.dump(outputs, f)
+
         print("Finished Inferencing ...")
-        alignments = self.get_alignments(
-            outputs, input_tokens.input_ids.shape[1]
-        )
+        alignments = self.get_alignments(outputs, input_tokens["input_ids"].shape[1], config)
         confidence = self.get_confidence(outputs)
+
+        # Move tokens to CPU
+        source_ids = input_tokens["input_ids"].detach().cpu()[0] #[0] removes the batch dimensions
+        pred_ids = outputs.sequences[:, input_tokens["input_ids"].shape[1]:].detach().cpu()[0]
 
         gc.collect()
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
-        return (input_tokens.input_ids, outputs.sequences[:, input_tokens.input_ids.shape[1]:], alignments, confidence)
+        #return (input_tokens.input_ids, outputs.sequences[:, input_tokens.input_ids.shape[1]:], alignments, confidence)
+        return PredictionResult(
+            instance_id=instance_id,
+            source=source_ids,
+            pred=pred_ids,
+            alignments=alignments,
+            confidence=confidence
+        )
 
-    def get_alignments(self, pred_outputs, prompt_len, top_k=5, batch_size=1):
-        out_seq_len = pred_outputs.sequences.shape[-1] - prompt_len
+    def get_alignments(self, pred_outputs, prompt_len, config: ModelConfig):
         aligned_tokens = []
 
-        for idx in range(len(pred_outputs.attentions)):
-            if idx >= len(pred_outputs.attentions):
-                continue
-
+        for idx in range(len(pred_outputs.attentions)): #iterate through all the output tokens
             try:
-                attn = pred_outputs.attentions[idx][-1]
+                attn = pred_outputs.attentions[idx][-1]  # gets last layer for a specific output token
+                # attn dimensions - step 0: [batch_size, num_heads, prompt_len, prompt_len]
+                # step i > 0: [batch_size, num_heads, 1, prompt_len + i] due to caching 
+                avg = attn.mean(dim=1)  # average across heads -> [batch_size, query_len, key_len]
+                this_token_attn = avg[:, -1].detach().cpu()  # select last query -> [batch_size, key_len], need to detach so we can send to list later
+                del attn, avg
 
-                last_layer_attn = attn.mean(dim=1)[:, 0].detach().cpu()
-                del attn
+                # Keep only attention over the original prompt tokens (exclude attention to generated outputs).
+                relevant_attn = this_token_attn[:, :prompt_len]
 
-                if last_layer_attn.shape[1] > prompt_len:
-                    relevant_attn = last_layer_attn[:, :prompt_len]
-                else:
-                    relevant_attn = last_layer_attn
+                top_k = config.k
+                top_k_actual = min(top_k, relevant_attn.shape[1]) # ensures we don't try to take more tokens than exist
 
-                top_k_actual = min(top_k, relevant_attn.shape[1])
-                top_indices = relevant_attn[0].topk(
-                    top_k_actual).indices.tolist()
+                #relevant_attn has dimensions [1, seq_len] so this gets the single attention vector
+                #we use topk to get the topk values for this idx step and put their positions into a list and append it at position idx to aligned_tokens
+                top_indices = relevant_attn[0].topk(top_k_actual).indices.tolist()
                 aligned_tokens.append(top_indices)
 
-                del last_layer_attn
-                del relevant_attn
+                del this_token_attn, relevant_attn
 
             except Exception as e:
-                print(
-                    f"Warning: Error processing attention at index {idx}: {e}")
-                aligned_tokens.append([0] * top_k)
+                print(f"Warning: Error processing attention at index {idx}: {e}")
+                aligned_tokens.append([0] * top_k) # just fill with 0's if there is an error
 
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
@@ -191,50 +130,45 @@ class QwenModel(Model):
     def get_confidence(self, outputs):
         confidences = []
         scores = outputs.scores
-        generated_tokens = outputs.sequences[:, -len(scores):]
+        generated_tokens = outputs.sequences[:, -len(scores):] #remember: outputs includes the inputs, so focus only on generated portion
 
-        for step, (logits, tokens) in enumerate(zip(scores, generated_tokens.T)):
-            probs = F.softmax(logits, dim=-1)
-            batch_conf = probs[range(probs.size(0)), tokens]
-            confidences.extend(batch_conf.tolist())
+        # len(scores) = num_generated_tokens, and each score tensor has shape [batch_size, vocab_size].
+        # generated_tokens has shape [batch_size, num_generated_tokens], so its transpose has shape [num_generated_tokens, batch_size].
+        # Since both scores and generated_tokens.T have num_generated_tokens as their first dimension, we can zip them together.
+        for step, (logits, tokens) in enumerate(zip(scores, generated_tokens.T)):  # iterate over each generated token
+            probs = F.softmax(logits, dim=-1)  # softmax across the vocab dimension (last dim), shape [batch_size, vocab_size]
+            # tokens has shape [batch_size], where each entry is the token ID chosen/generated at this step.
+            # probs[range(probs.size(0)), tokens] performs advanced indexing: for each row in the batch, select the probability of the chosen token.
+            batch_conf = probs[range(probs.size(0)), tokens].detach().cpu()  # detach for tolist()
+            confidences.extend(batch_conf.tolist())  # use extend to keep confidences as a flat list
 
         return confidences
 
-    def predict(
-        self,
-        instance: DatasetInstance,
-        config: ModelConfig,
-    ) -> PredictionResult:
+    def predict(self, instance: DatasetInstance, config: ModelConfig) -> PredictionResult:
+        # 1. Ensure model is in evaluation mode (safe to omit if already set in __init__)
         self.model.eval()
 
+        # 2. Disable gradient tracking for efficient inference
         with torch.no_grad():
-            prompt = self.prepare_prompt(
-                instance.source,
-                instance.source_lang,
-                instance.target_lang
-            )
+            # 3. Prepare the prompt from the source code, tokenize it, and run inference, returning a PredictionResult
+            prompt = self.prepare_prompt(instance.source, instance.source_lang, instance.target_lang)
             tokenized_input = self.tokenize(prompt)
+            device = next(self.model.parameters()).device # # Move to any CUDA device from CPU; HF handles multi-GPU dispatch internally
+            tokenized_input = BatchEncoding({k: v.to(device) for k, v in tokenized_input.items()})
+            result = self.infer(tokenized_input, config, instance.instance_id)
 
-            pred = self.infer(
-                tokenized_input, config
-            )
+            # 4. Perform manual garbage collection and clear unused CUDA memory
             gc.collect()
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
+        
+        # 5. Print the ground truth and the decoded prediction for inspection
+        print(f"[{instance.instance_id}]\nGROUND TRUTH:\n{instance.target}\nPREDICTION:\n{self.decode(result.pred)}\n")
 
-        result = PredictionResult(
-            instance_id=instance.instance_id,
-            source=pred[0].detach().cpu()[0],
-            pred=pred[1].detach().cpu()[0],
-            alignments=pred[2],
-            confidence=pred[3],
-        )
-
-        del pred
-        del tokenized_input
-        del prompt
-
+        # 6. Delete temporary variables and clean up memory again
+        del tokenized_input, prompt
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
+        # 7. Return the final prediction result
         return result

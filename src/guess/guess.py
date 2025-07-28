@@ -1,11 +1,26 @@
-from typing import Dict
+from typing import Dict, Optional
 
-from src.helpers.model import Model, PredictionResult, get_device
+from src.helpers.model import Model, PredictionResult
 from src.domain.models.QwenModel import QwenModel
 from src.domain.models.BartLargeModel import BartLargeModel
 from src.helpers.launch_spec import LaunchSpec
 from src.helpers.dataset import DatasetInstance
 from datasets import load_dataset
+
+# This Guess class has three attributes: launch_spec, model, and dataset
+#
+# It stores the full config for reference (self.launch_spec)
+# It loads a model based on the config's architecture (self.model)
+# It loads a dataset using HuggingFace’s datasets lib (self.dataset)
+
+# guess() does the following:
+#
+#  Iterates over the loaded dataset
+#  Skips files listed in the config
+#  Converts each row to a DatasetInstance object
+#  Sends it to the model's predict() method. Note: See QwenModel.py for more on this
+#  Catches errors and saves None if prediction fails
+#  Returns a dictionary mapping instance IDs to results
 
 
 class Guess:
@@ -14,27 +29,20 @@ class Guess:
 
         if launch_spec.model_config.architecture == "qwen":
             print(f"Loading Qwen model: {launch_spec.model_config.name}")
-            self.model: Model = QwenModel(
-                model_name=launch_spec.model_config.name, device=get_device()
-            )
+            self.model: Model = QwenModel(model_name=launch_spec.model_config.name)
         elif launch_spec.model_config.architecture == "bart":
             print(f"Loading BART model: {launch_spec.model_config.name}")
-            self.model: Model = BartLargeModel(
-                model_name=launch_spec.model_config.name, device=get_device()
-            )
+            self.model: Model = BartLargeModel(model_name=launch_spec.model_config.name)
         else:
-            raise ValueError(
-                f"Unknown model type in {launch_spec.model_config.architecture}"
-            )
+            raise ValueError(f"Unknown model type in {launch_spec.model_config.architecture}")
 
-        self.dataset = load_dataset(
-            launch_spec.dataset_config.dataset_name,
-            split=launch_spec.dataset_config.split
-        )
+        # load_dataset("adpretko/reducedeval", split="train") gives Dataset object with rows {x86, arm, file} - can access examples via indexing (dataset[0])
+        self.dataset = load_dataset(launch_spec.dataset_config.dataset_name, split=launch_spec.dataset_config.split)
 
-    def guess(self) -> Dict[str, PredictionResult]:
+    def guess(self) -> Dict[str, Optional[PredictionResult]]:
         all_predictions = {}
 
+        # skip unwanted files - make sure this is adjusted correctly in the yaml!
         for raw_instance in self.dataset:
             if raw_instance["file"] in self.launch_spec.dataset_config.skip_files:
                 continue
@@ -56,6 +64,3 @@ class Guess:
                 continue
 
         return all_predictions
-
-    def evaluate(self, predictions: Dict[str, Dict]) -> Dict[str, float]:
-        return self.dataset.evaluate(predictions)
