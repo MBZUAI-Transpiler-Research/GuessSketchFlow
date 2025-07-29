@@ -74,7 +74,7 @@ class QwenModel(Model):
 
         print("Finished Inferencing ...")
         alignments = self.get_alignments(outputs, input_tokens["input_ids"].shape[1], config)
-        confidence = self.get_confidence(outputs)
+        confidence, alt_tokens = self.get_confidence(outputs)
 
         # Move tokens to CPU
         source_ids = input_tokens["input_ids"].detach().cpu()[0] #[0] removes the batch dimensions
@@ -84,13 +84,13 @@ class QwenModel(Model):
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
-        #return (input_tokens.input_ids, outputs.sequences[:, input_tokens.input_ids.shape[1]:], alignments, confidence)
         return PredictionResult(
             instance_id=instance_id,
             source=source_ids,
             pred=pred_ids,
             alignments=alignments,
-            confidence=confidence
+            confidence=confidence,
+            alt_tokens=alt_tokens
         )
 
     def get_alignments(self, pred_outputs, prompt_len, config: ModelConfig):
@@ -127,8 +127,9 @@ class QwenModel(Model):
 
         return aligned_tokens
 
-    def get_confidence(self, outputs):
+    def get_confidence(self, outputs, n: int = 3):
         confidences = []
+        all_alt_tokens = []     # List of top-n alternatives for each token
         scores = outputs.scores
         generated_tokens = outputs.sequences[:, -len(scores):] #remember: outputs includes the inputs, so focus only on generated portion
 
@@ -142,7 +143,14 @@ class QwenModel(Model):
             batch_conf = probs[range(probs.size(0)), tokens].detach().cpu()  # detach for tolist()
             confidences.extend(batch_conf.tolist())  # use extend to keep confidences as a flat list
 
-        return confidences
+            # Top-n alternatives for each batch element
+            alt_toks = []
+            sorted_probs = probs.sort(descending=True)
+            for tok_id, prob in zip(sorted_probs.indices[0, :n], sorted_probs.values[0, :n]):
+                alt_toks.append((tok_id.item(), prob.item()))
+            all_alt_tokens.append(alt_toks)
+
+        return confidences, all_alt_tokens
 
     def predict(self, instance: DatasetInstance, config: ModelConfig) -> PredictionResult:
         # 1. Ensure model is in evaluation mode (safe to omit if already set in __init__)

@@ -2,7 +2,7 @@ import torch
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
 from .dataset import DatasetInstance
-from typing import List, Optional, Union
+from typing import List, Optional, Union, Tuple
 from transformers import PreTrainedTokenizer
 
 ## choose best available device, but be careful! this is set to cuda:1 and needs to be manually changed. NOT used in present iteration of code
@@ -35,6 +35,7 @@ class PredictionResult:
     pred: torch.Tensor
     alignments: List[List[int]]
     confidence: List[float]
+    alt_tokens: Optional[List[List[Tuple[int, float]]]] = None
 
 # Used to initialze each model (Bart or Qwen)
 class Model(ABC):
