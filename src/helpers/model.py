@@ -28,14 +28,31 @@ class ModelConfig:
     k: int
 
 # Used as the return object of the predict method to amalgamate all data into one object
+# @dataclass
+# class PredictionResult:
+#     instance_id: str
+#     source: torch.Tensor
+#     pred: torch.Tensor
+#     alignments: List[List[int]]
+#     confidence: List[float]
+#     alt_tokens: Optional[List[List[Tuple[int, float]]]] = None
+
 @dataclass
 class PredictionResult:
-    instance_id: str
-    source: torch.Tensor
-    pred: torch.Tensor
-    alignments: List[List[int]]
-    confidence: List[float]
-    alt_tokens: Optional[List[List[Tuple[int, float]]]] = None
+    instance_id: str  # stays the same
+    source: torch.Tensor  # still the same for all beams (the original prompt)
+    
+    # One list of token IDs per beam
+    pred: List[torch.Tensor]  # shape: [num_beams][token_ids]
+
+    # For each beam, each token has k aligned input token indices
+    alignments: List[List[List[int]]]  # shape: [num_beams][num_tokens][k]
+
+    # For each beam, each token has a float confidence score
+    confidence: List[List[float]]  # shape: [num_beams][num_tokens]
+
+    # For each beam, each token has a list of top-n alt tokens + probabilities
+    alt_tokens: Optional[List[List[List[Tuple[int, float]]]]] = None  # shape: [num_beams][num_tokens][top_n]
 
 # Used to initialze each model (Bart or Qwen)
 class Model(ABC):
