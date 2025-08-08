@@ -1,3 +1,13 @@
-artifacts/
-__pycache__
+# Ignore Python cache
+__pycache__/
 *.pyc
+
+# Ignore build artifacts
+build/
+dist/
+
+# Ignore local editor configs
+.vscode/
+
+# Ignore debug data
+predictions.pkl

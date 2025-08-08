@@ -6,9 +6,9 @@ os.makedirs("tmp_parse_inputs", exist_ok=True)
 os.makedirs("data", exist_ok=True)
 
 # Load dataset  
-#dataset = load_dataset("ahmedheakl/gg-bench-armv8-O0", split="train")
+dataset = load_dataset("ahmedheakl/gg-bench-armv8-O0", split="train")
 #dataset = load_dataset("ahmedheakl/gg-bench-bringup-O0", split="train")
-dataset = load_dataset("adpretko/reducedeval", split="train")
+#dataset = load_dataset("adpretko/reducedeval", split="train")
 
 for row in dataset:
     basename = row["file"].replace("/code.c", "")  # e.g., "eval/problem42"

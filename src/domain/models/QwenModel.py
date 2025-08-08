@@ -59,7 +59,7 @@ class QwenModel(Model):
                 temperature=config.temperature,
                 num_beams=config.num_beams,
                 num_return_sequences=config.num_return_sequences,
-                do_sample=True,
+                do_sample=False,
                 early_stopping=True,
                 output_attentions=True,
                 return_dict_in_generate=True,
@@ -68,22 +68,14 @@ class QwenModel(Model):
                 use_cache=True,
             )
 
-        #Dump to pkl file
-        with open("outputs_debug.pkl", "wb") as f:
-            pickle.dump(outputs, f)
-
         input_len = input_tokens["input_ids"].shape[1]  # prompt length
 
         print("Finished Inferencing ...")
         alignments = self.get_alignments(outputs, input_len, config)
         confidence, alt_tokens = self.get_confidence(outputs, input_len)
 
-        print("DEBUG SHAPE:", len(alt_tokens), len(alt_tokens[0]))
-        print("DEBUG FIRST ENTRY:", alt_tokens[0][0])
-
         # Move tokens to CPU
         source_ids = input_tokens["input_ids"].detach().cpu()[0] #[0] removes the batch dimensions
-        #pred_ids = outputs.sequences[:, input_tokens["input_ids"].shape[1]:].detach().cpu()[0]
         pred_ids = [
             outputs.sequences[i, input_len:].detach().cpu()
             for i in range(outputs.sequences.shape[0])
@@ -114,7 +106,7 @@ class QwenModel(Model):
             for idx in range(num_output_tokens):  # One step per generated token
                 try:
                     # Get the attention for the final layer at this generation step
-                    attn = pred_outputs.attentions[idx][-1]  # shape: [batch, heads, 1, key_len]
+                    attn = pred_outputs.attentions[idx][-1]  # shape: [batch, heads, 1, key_len] 
                     
                     # Select attention for this beam
                     attn_beam = attn[beam_idx]  # shape: [heads, 1, key_len]
@@ -155,149 +147,41 @@ class QwenModel(Model):
         return all_aligned  # shape: [num_beams][num_tokens][k]
 
 
-    # def get_alignments(self, pred_outputs, prompt_len, config: ModelConfig):
-    #     aligned_tokens = []
-
-    #     for idx in range(len(pred_outputs.attentions)): #iterate through all the output tokens
-    #         try:
-    #             attn = pred_outputs.attentions[idx][-1]  # gets last layer for a specific output token
-    #             # attn dimensions - step 0: [batch_size, num_heads, prompt_len, prompt_len]
-    #             # step i > 0: [batch_size, num_heads, 1, prompt_len + i] due to caching 
-    #             avg = attn.mean(dim=1)  # average across heads -> [batch_size, query_len, key_len]
-    #             this_token_attn = avg[:, -1].detach().cpu()  # select last query -> [batch_size, key_len], need to detach so we can send to list later
-    #             del attn, avg
-
-    #             # Keep only attention over the original prompt tokens (exclude attention to generated outputs).
-    #             relevant_attn = this_token_attn[:, :prompt_len]
-
-    #             top_k = config.k
-    #             top_k_actual = min(top_k, relevant_attn.shape[1]) # ensures we don't try to take more tokens than exist
-
-    #             #relevant_attn has dimensions [1, seq_len] so this gets the single attention vector
-    #             #we use topk to get the topk values for this idx step and put their positions into a list and append it at position idx to aligned_tokens
-    #             top_indices = relevant_attn[0].topk(top_k_actual).indices.tolist()
-    #             aligned_tokens.append(top_indices)
-
-    #             del this_token_attn, relevant_attn
-
-    #         except Exception as e:
-    #             print(f"Warning: Error processing attention at index {idx}: {e}")
-    #             aligned_tokens.append([0] * top_k) # just fill with 0's if there is an error
-
-    #         if torch.cuda.is_available():
-    #             torch.cuda.empty_cache()
-
-    #     return aligned_tokens
-
-    def get_confidence(self, outputs, prompt_len: int, n: int = 3) -> Tuple[List[List[float]], List[List[List[Tuple[int, float]]]]]:
-        """
-        Returns:
-            confidences: List of shape [num_beams][num_generated_tokens]
-            alt_tokens: List of shape [num_beams][num_generated_tokens][top_n]
-        """
-        scores = outputs.scores  # List of length = num_generated_tokens, each [num_beams, vocab_size]
-        beam_indices = getattr(outputs, "beam_indices", None)
+    def get_confidence(self, outputs, input_len: int, top_k: int = 3) -> List[List[float]], List[List[List[Tuple[int, float]]]]]:
 
         num_beams = outputs.sequences.shape[0]
-        num_generated_tokens = len(scores)
+        num_steps = len(outputs.scores)
 
-        # Only the generated portion (excludes prompt)
-        generated_tokens = outputs.sequences[:, -num_generated_tokens:]  # [num_beams, num_generated_tokens]
+        confidence = []  # per-beam list of confidences for generated tokens
+        alt_tokens = []  # per-beam list of top-k token predictions per step
 
-        all_confidences = []
-        all_alt_tokens = []
+        for beam_idx in range(num_beams):
+            beam_conf = []
+            beam_alt = []
 
-        for b in range(num_beams):
-                beam_conf = []
-                beam_alts = []
+            # Get the generated part only (strip prompt)
+            generated_tokens = outputs.sequences[beam_idx][input_len:]
 
-                for t in range(num_generated_tokens):
-                    token_id = generated_tokens[b, t].item()
-                    #token_id = outputs.sequences[b, prompt_len + t].item()
+            assert len(generated_tokens) == num_steps, f"Mismatch: {len(generated_tokens)} tokens vs {num_steps} scores"
 
-                    # if beam_indices is not None:
-                    #     slot = beam_indices[b, prompt_len + t].item()
-                    # else:
-                    #     slot = b  # fallback
-                    logits = scores[t][b]
+            for step_idx, token_id in enumerate(generated_tokens):
+                logits = outputs.scores[step_idx][beam_idx]  # shape: [vocab_size]
+                probs = F.softmax(logits, dim=-1)
 
-                    #logits = scores[t][slot]
-                    probs = F.softmax(logits, dim=-1)
-                    
-                    beam_conf.append(probs[token_id].item())
-                    topk = probs.topk(n)
-                    beam_alts.append([(i.item(), p.item()) for i, p in zip(topk.indices, topk.values)])
+                # Confidence of the chosen token
+                token_conf = probs[token_id].item()
+                beam_conf.append(token_conf)
 
-                all_confidences.append(beam_conf)
-                all_alt_tokens.append(beam_alts)
+                # Top-k alternative tokens
+                topk = torch.topk(probs, k=top_k)
+                alt = [(i.item(), p.item()) for i, p in zip(topk.indices, topk.values)]
+                beam_alt.append(alt)
 
-        return all_confidences, all_alt_tokens
+            confidence.append(beam_conf)
+            alt_tokens.append(beam_alt)
 
+        return confidence, alt_tokens
 
-    ### COME BACK TO THIS 4 August 2025
-    # def get_confidence(self, outputs, n: int = 3) -> Tuple[List[List[float]], List[List[List[Tuple[int, float]]]]]:
-    #     """
-    #     Returns:
-    #         confidences: List of shape [num_beams][num_generated_tokens]
-    #         alt_tokens: List of shape [num_beams][num_generated_tokens][top_n]
-    #     """
-    #     all_confidences = []
-    #     all_alt_tokens = []
-
-    #     scores = outputs.scores  # List of [num_beams, vocab_size], length = num_generated_tokens
-    #     num_beams = outputs.sequences.shape[0]
-    #     num_generated_tokens = len(scores)
-
-    #     # Get just the generated portion of sequences (exclude prompt)
-    #     generated_tokens = outputs.sequences[:, -num_generated_tokens:]  # shape: [num_beams, num_generated_tokens]
-
-    #     for beam_idx in range(num_beams):
-    #         confidences = []  # list of floats for this beam
-    #         alt_tokens = []   # list of top-n alternatives for each token
-
-    #         for step, token_id in enumerate(generated_tokens[beam_idx]):
-    #             logits = scores[step]             # shape: [num_beams, vocab_size]
-    #             probs = F.softmax(logits[beam_idx], dim=-1)  # shape: [vocab_size]
-
-    #             # Confidence of the chosen token
-    #             confidence = probs[token_id].item()
-    #             confidences.append(confidence)
-
-    #             # Top-n alternative tokens and their probabilities
-    #             topk = probs.topk(n)
-    #             alternatives = [(i.item(), p.item()) for i, p in zip(topk.indices, topk.values)]
-    #             alt_tokens.append(alternatives)
-
-    #         all_confidences.append(confidences)
-    #         all_alt_tokens.append(alt_tokens)
-
-    #     return all_confidences, all_alt_tokens  # shape: [num_beams][num_tokens][n]
-
-
-    # def get_confidence(self, outputs, n: int = 3):
-    #     confidences = []
-    #     all_alt_tokens = []     # List of top-n alternatives for each token
-    #     scores = outputs.scores
-    #     generated_tokens = outputs.sequences[:, -len(scores):] #remember: outputs includes the inputs, so focus only on generated portion
-
-    #     # len(scores) = num_generated_tokens, and each score tensor has shape [batch_size, vocab_size].
-    #     # generated_tokens has shape [batch_size, num_generated_tokens], so its transpose has shape [num_generated_tokens, batch_size].
-    #     # Since both scores and generated_tokens.T have num_generated_tokens as their first dimension, we can zip them together.
-    #     for step, (logits, tokens) in enumerate(zip(scores, generated_tokens.T)):  # iterate over each generated token
-    #         probs = F.softmax(logits, dim=-1)  # softmax across the vocab dimension (last dim), shape [batch_size, vocab_size]
-    #         # tokens has shape [batch_size], where each entry is the token ID chosen/generated at this step.
-    #         # probs[range(probs.size(0)), tokens] performs advanced indexing: for each row in the batch, select the probability of the chosen token.
-    #         batch_conf = probs[range(probs.size(0)), tokens].detach().cpu()  # detach for tolist()
-    #         confidences.extend(batch_conf.tolist())  # use extend to keep confidences as a flat list    
-
-    #         # Top-n alternatives for each batch element
-    #         alt_toks = []
-    #         sorted_probs = probs.sort(descending=True)
-    #         for tok_id, prob in zip(sorted_probs.indices[0, :n], sorted_probs.values[0, :n]):
-    #             alt_toks.append((tok_id.item(), prob.item()))
-    #         all_alt_tokens.append(alt_toks)
-
-    #     return confidences, all_alt_tokens
 
     def predict(self, instance: ClozeInstance, config: ModelConfig) -> PredictionResult:
         # 1. Ensure model is in evaluation mode (safe to omit if already set in __init__)
@@ -319,7 +203,6 @@ class QwenModel(Model):
                 torch.cuda.empty_cache()
         
         # 5. Print the ground truth and the decoded prediction for inspection
-        #print(f"[{instance.instance_id}]\nGROUND TRUTH:\n{instance.target_fn_code}\nPREDICTION:\n{self.decode(result.pred)}\n")
         print(f"[{instance.instance_id}]\nGROUND TRUTH:\n{instance.target_fn_code}")
         for i, pred_ids in enumerate(result.pred):
             decoded = self.decode(pred_ids)
@@ -332,5 +215,3 @@ class QwenModel(Model):
 
         # 7. Return the final prediction result
         return result
-
-
